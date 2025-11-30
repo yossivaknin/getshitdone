@@ -1,0 +1,326 @@
+'use client'
+
+import { useState, useEffect, useMemo } from 'react';
+import * as React from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tag as TagIcon, Plus, X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from '@/lib/utils';
+import { getTagNames, addTagToManaged, getTagColor } from '@/lib/tags';
+
+interface CreateTaskDialogProps {
+  listId: string;
+  workspaceId: string;
+  children?: React.ReactNode;
+  trigger?: React.ReactNode;
+  onCreateTask: (task: any) => void;
+  allTags?: string[]; // All existing tags from all tasks
+}
+
+export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCreateTask, allTags = [] }: CreateTaskDialogProps) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [duration, setDuration] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const [showNewTagInput, setShowNewTagInput] = useState(false);
+  const [managedTags, setManagedTags] = useState<string[]>([]);
+  
+  // Load managed tags from localStorage
+  useEffect(() => {
+    const loadTags = () => {
+      setManagedTags(getTagNames());
+    };
+    
+    loadTags();
+    
+    // Listen for storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'getshitdone_tags') {
+        loadTags();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('tagsUpdated', loadTags);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('tagsUpdated', loadTags);
+    };
+  }, []);
+  
+  // Use managed tags instead of allTags prop
+  const availableTags = useMemo(() => {
+    return Array.from(new Set([...managedTags, ...selectedTags])).sort();
+  }, [managedTags, selectedTags]);
+  
+  // Set default date to today when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      setDueDate(today.toISOString().split('T')[0]);
+      setTitle('');
+      setDescription('');
+      setDuration('');
+      setSelectedTags([]);
+      setNewTagName('');
+      setShowNewTagInput(false);
+    }
+  }, [open]);
+  
+  const handleTriggerClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(true);
+  };
+  
+  const triggerElement = trigger || children;
+
+  const handleTagToggle = (tagName: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tagName)
+        ? prev.filter(t => t !== tagName)
+        : [...prev, tagName]
+    );
+  };
+
+  const handleCreateTag = () => {
+    const trimmedName = newTagName.trim();
+    if (!trimmedName) return;
+    
+    if (selectedTags.includes(trimmedName)) {
+      return;
+    }
+
+    // Add tag to managed tags in localStorage
+    addTagToManaged(trimmedName);
+    
+    // Trigger event to update other components
+    window.dispatchEvent(new Event('tagsUpdated'));
+    
+    setSelectedTags(prev => [...prev, trimmedName]);
+    setNewTagName('');
+    setShowNewTagInput(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    // Validate duration
+    const durationValue = duration ? parseInt(duration) : undefined;
+    if (durationValue !== undefined && (durationValue <= 0 || isNaN(durationValue))) {
+      toast.error('Duration must be a positive number');
+      return;
+    }
+    
+    const newTask = {
+      id: Date.now().toString(),
+      list_id: listId,
+      title,
+      description,
+      tags: selectedTags.map(name => ({
+        name,
+        color: getTagColor(name)
+      })),
+      // Store date as ISO string for consistent parsing
+      dueDate: dueDate || undefined,
+      duration: durationValue,
+    };
+
+    onCreateTask(newTask);
+    setOpen(false);
+    // Reset form
+    setTitle('');
+    setDescription('');
+    setDueDate('');
+    setDuration('');
+    setSelectedTags([]);
+  };
+
+  const renderedTrigger = React.useMemo(() => {
+    if (!triggerElement) return null;
+    
+    if (React.isValidElement(triggerElement)) {
+      return React.cloneElement(triggerElement as React.ReactElement<any>, {
+        onClick: handleTriggerClick,
+      });
+    }
+    
+    return triggerElement;
+  }, [triggerElement]);
+
+  return (
+    <>
+      {renderedTrigger}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-[520px] md:max-w-[550px] lg:max-w-[600px] max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-2 sm:pb-4">
+            <DialogTitle className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Add Task</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm text-gray-500">
+              Create a new task for your kanban board.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
+              {/* Title */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="create-title" className="text-xs sm:text-sm font-semibold text-gray-700">
+                  Title *
+                </Label>
+                <Input
+                  id="create-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="What needs to get done?"
+                  className="w-full h-10 sm:h-11 text-sm sm:text-base"
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="create-description" className="text-xs sm:text-sm font-semibold text-gray-700">
+                  Description
+                </Label>
+                <textarea
+                  id="create-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Define the output. No fluff."
+                  className="w-full min-h-[80px] sm:min-h-[100px] px-3 py-2 text-sm border-2 border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5 sm:gap-2">
+                  <TagIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Tags
+                </Label>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                  {availableTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleTagToggle(tag)}
+                        className={cn(
+                          "text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all",
+                          isSelected
+                            ? "bg-black text-white border-black"
+                            : "bg-white text-gray-700 border-gray-400 hover:bg-gray-50"
+                        )}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                  {!showNewTagInput ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTagInput(true)}
+                      className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-semibold bg-gray-50 text-gray-600 border-2 border-dashed border-gray-300 hover:bg-gray-100 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span className="hidden sm:inline">New Tag</span>
+                      <span className="sm:hidden">Tag</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                      <Input
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCreateTag();
+                          } else if (e.key === 'Escape') {
+                            setShowNewTagInput(false);
+                            setNewTagName('');
+                          }
+                        }}
+                        placeholder="Tag name..."
+                        className="h-8 flex-1 sm:w-32 text-xs"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCreateTag}
+                        className="h-8 px-2 text-xs"
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setShowNewTagInput(false);
+                          setNewTagName('');
+                        }}
+                        className="h-8 px-2"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Date and Duration Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="create-dueDate" className="text-xs sm:text-sm font-semibold text-gray-700">
+                    Deadline
+                  </Label>
+                  <Input
+                    id="create-dueDate"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full h-10 sm:h-11 border-2 border-slate-300 text-sm sm:text-base"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="create-duration" className="text-xs sm:text-sm font-semibold text-gray-700">
+                    Time Budget
+                  </Label>
+                  <Input
+                    id="create-duration"
+                    type="number"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="60"
+                    className="w-full h-10 sm:h-11 border-2 border-slate-300 text-sm sm:text-base"
+                    min="1"
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-2 md:gap-0 pt-3 sm:pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="w-full sm:w-auto order-2 sm:order-1 text-sm">
+                Cancel
+              </Button>
+              <Button type="submit" className="w-full sm:w-auto order-1 sm:order-2 text-sm px-3 sm:px-4">Create Task</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
