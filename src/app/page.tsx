@@ -5,8 +5,9 @@ import { Board } from "@/components/kanban/Board";
 import { MissionStatus } from "@/components/mission-status";
 import { MotivatorSubtitle } from "@/components/motivator-subtitle";
 import Link from 'next/link';
-import { Settings, ChevronRight, ChevronLeft, Target } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, Target, LogOut } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
+import { logout } from './actions';
 
 // Mock data - in production this would come from your database
 const mockLists = [
@@ -196,9 +197,15 @@ export default function UnifiedViewPage() {
               <Settings className="w-5 h-5 text-gray-600" />
             </button>
           </Link>
-          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm text-gray-600 font-medium text-xs sm:text-sm">
-            JS
-          </div>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="p-2 hover:bg-white rounded-lg transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5 text-gray-600" />
+            </button>
+          </form>
         </div>
       </header>
       

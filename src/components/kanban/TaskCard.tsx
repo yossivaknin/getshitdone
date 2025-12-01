@@ -170,8 +170,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 ref={setNodeRef}
                 style={style}
                 {...attributes}
-                className={cn(
-                    "p-3 sm:p-3.5 md:p-4 pl-6 sm:pl-7 md:pl-8 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer group relative w-full",
+                        className={cn(
+                    "p-3 sm:p-3.5 md:p-4 pl-14 sm:pl-16 md:pl-20 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer group relative w-full",
                     getStatusStripeColor(),
                     isDone ? "bg-slate-50 opacity-50 grayscale" : "bg-white",
                     isDragging && "scale-105 opacity-50"
@@ -182,7 +182,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 {/* Drag handle - only this area is draggable */}
                 <div 
                     {...listeners}
-                    className="drag-handle absolute left-0 top-0 bottom-0 w-12 sm:w-14 md:w-16 cursor-grab active:cursor-grabbing flex items-center justify-center z-10"
+                    className="drag-handle absolute left-0 top-0 bottom-0 w-12 sm:w-14 md:w-16 cursor-grab active:cursor-grabbing flex items-center justify-center z-10 pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
                 >
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -203,15 +204,15 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                             </button>
                         )}
                     </div>
-                </div>
+            </div>
 
                 {/* Task Title */}
                 <h3 className={cn(
                     "text-sm sm:text-[15px] font-semibold text-gray-800 mb-3 sm:mb-4 leading-snug",
                     isDone && "line-through text-gray-400"
                 )}>
-                    {task.title}
-                </h3>
+                {task.title}
+            </h3>
 
                 {/* Footer Info */}
                 <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-gray-50">
@@ -278,9 +279,9 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                             )}>
                                 <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                 <span className="font-mono">{formatDuration(task.duration)}</span>
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
+                </div>
 
                     {/* Delete Button - appears on hover */}
                     {onDelete && (
@@ -291,9 +292,9 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                         >
                             <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
-                    )}
-                </div>
+                )}
             </div>
+        </div>
 
             {onEdit && (
                 <EditTaskDialog
