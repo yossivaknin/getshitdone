@@ -48,6 +48,10 @@ export async function login(formData: FormData) {
     revalidatePath('/', 'layout')
     redirect('/')
   } catch (error: any) {
+    // Next.js redirect() throws NEXT_REDIRECT error - this is expected, don't catch it
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error // Re-throw redirect errors
+    }
     console.error("Login exception:", error)
     const errorMsg = error?.message || 'Unknown error'
     redirect('/login?message=' + encodeURIComponent('Login error: ' + errorMsg))
@@ -104,6 +108,10 @@ export async function signup(formData: FormData) {
     // Fallback: redirect to login
     redirect('/login?message=' + encodeURIComponent('Signup successful. Please check your email to confirm your account.'))
   } catch (error: any) {
+    // Next.js redirect() throws NEXT_REDIRECT error - this is expected, don't catch it
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error // Re-throw redirect errors
+    }
     console.error("Signup exception:", error)
     const errorMsg = error?.message || 'Unknown error'
     redirect('/login?message=' + encodeURIComponent('Signup error: ' + errorMsg))
@@ -155,6 +163,10 @@ export async function loginWithGoogle() {
       redirect('/login?message=' + encodeURIComponent('Google login failed: OAuth not configured. Please check Supabase Google provider settings.'))
     }
   } catch (error: any) {
+    // Next.js redirect() throws NEXT_REDIRECT error - this is expected, don't catch it
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error // Re-throw redirect errors
+    }
     console.error("Google login exception:", error)
     const errorMsg = error?.message || 'Unknown error'
     redirect('/login?message=' + encodeURIComponent('Google login error: ' + errorMsg))
