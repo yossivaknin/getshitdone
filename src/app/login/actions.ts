@@ -11,7 +11,15 @@ export async function login(formData: FormData) {
     supabase = createClient()
   } catch (error: any) {
     console.error("Failed to create Supabase client:", error)
-    redirect('/login?message=' + encodeURIComponent('Configuration error. Please contact support.'))
+    const errorMsg = error?.message || 'Unknown error'
+    // Check which variables are missing
+    const missingUrl = !process.env.NEXT_PUBLIC_SUPABASE_URL
+    const missingKey = !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    let userMsg = 'Configuration error: '
+    if (missingUrl) userMsg += 'NEXT_PUBLIC_SUPABASE_URL is missing. '
+    if (missingKey) userMsg += 'NEXT_PUBLIC_SUPABASE_ANON_KEY is missing. '
+    if (!missingUrl && !missingKey) userMsg += errorMsg
+    redirect('/login?message=' + encodeURIComponent(userMsg))
   }
 
   const email = formData.get('email') as string
@@ -46,7 +54,15 @@ export async function signup(formData: FormData) {
     supabase = createClient()
   } catch (error: any) {
     console.error("Failed to create Supabase client:", error)
-    redirect('/login?message=' + encodeURIComponent('Configuration error. Please contact support.'))
+    const errorMsg = error?.message || 'Unknown error'
+    // Check which variables are missing
+    const missingUrl = !process.env.NEXT_PUBLIC_SUPABASE_URL
+    const missingKey = !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    let userMsg = 'Configuration error: '
+    if (missingUrl) userMsg += 'NEXT_PUBLIC_SUPABASE_URL is missing. '
+    if (missingKey) userMsg += 'NEXT_PUBLIC_SUPABASE_ANON_KEY is missing. '
+    if (!missingUrl && !missingKey) userMsg += errorMsg
+    redirect('/login?message=' + encodeURIComponent(userMsg))
   }
 
   const email = formData.get('email') as string
@@ -93,7 +109,15 @@ export async function loginWithGoogle() {
     supabase = createClient()
   } catch (error: any) {
     console.error("Failed to create Supabase client:", error)
-    redirect('/login?message=' + encodeURIComponent('Configuration error. Please contact support.'))
+    const errorMsg = error?.message || 'Unknown error'
+    // Check which variables are missing
+    const missingUrl = !process.env.NEXT_PUBLIC_SUPABASE_URL
+    const missingKey = !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    let userMsg = 'Configuration error: '
+    if (missingUrl) userMsg += 'NEXT_PUBLIC_SUPABASE_URL is missing. '
+    if (missingKey) userMsg += 'NEXT_PUBLIC_SUPABASE_ANON_KEY is missing. '
+    if (!missingUrl && !missingKey) userMsg += errorMsg
+    redirect('/login?message=' + encodeURIComponent(userMsg))
   }
   
   try {
