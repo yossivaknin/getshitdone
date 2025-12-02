@@ -126,6 +126,8 @@ export async function loginWithGoogle() {
       ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
       : 'http://localhost:3000/auth/callback'
     
+    console.log('Initiating Google OAuth with redirect URL:', redirectUrl)
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -134,17 +136,20 @@ export async function loginWithGoogle() {
     })
 
     if (error) {
-      console.error("Google login error:", error.message)
+      console.error("Google login error:", error.message, error)
       redirect('/login?message=' + encodeURIComponent('Google login failed: ' + error.message))
     }
 
     if (data?.url) {
+      console.log('Redirecting to Google OAuth URL')
       redirect(data.url)
     } else {
-      redirect('/login?message=' + encodeURIComponent('Google login failed: No redirect URL received'))
+      console.error('No OAuth URL received from Supabase')
+      redirect('/login?message=' + encodeURIComponent('Google login failed: OAuth not configured. Please check Supabase Google provider settings.'))
     }
   } catch (error: any) {
     console.error("Google login exception:", error)
-    redirect('/login?message=' + encodeURIComponent('An error occurred during Google login. Please try again.'))
+    const errorMsg = error?.message || 'Unknown error'
+    redirect('/login?message=' + encodeURIComponent('Google login error: ' + errorMsg))
   }
 }
