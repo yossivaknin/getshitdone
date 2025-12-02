@@ -7,7 +7,11 @@ export function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables')
+    const missing = []
+    if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
+    if (!supabaseAnonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+    console.error(`Missing Supabase environment variables: ${missing.join(', ')}`)
+    throw new Error(`Missing Supabase environment variables: ${missing.join(', ')}`)
   }
 
   try {
@@ -35,9 +39,9 @@ export function createClient() {
         },
       }
     )
-  } catch (error) {
-    console.error('Error creating Supabase client:', error)
-    throw new Error('Failed to create Supabase client')
+  } catch (error: any) {
+    console.error('Error creating Supabase client:', error?.message || error)
+    throw new Error(`Failed to create Supabase client: ${error?.message || 'Unknown error'}`)
   }
 }
 
