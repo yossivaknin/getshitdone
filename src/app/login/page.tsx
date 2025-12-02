@@ -77,7 +77,11 @@ export default function LoginPage() {
           </div>
 
           {message && (
-            <div className="p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm rounded-sm text-center font-mono">
+            <div className={`p-4 rounded-sm text-sm text-center font-mono ${
+              message.includes('Account created') || message.includes('check your email') || message.includes('confirmation')
+                ? 'bg-emerald-50 border-2 border-emerald-200 text-emerald-700'
+                : 'bg-red-50 border-2 border-red-200 text-red-600'
+            }`}>
               {message}
             </div>
           )}
