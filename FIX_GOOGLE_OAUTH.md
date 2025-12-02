@@ -30,8 +30,8 @@ You're seeing "An error occurred during Google login" because Google OAuth is no
    **If these are empty**, you need to create Google OAuth credentials first (see Step 2).
 
    **If you already have credentials**, paste them here:
-   - Client ID: `xxxxx.apps.googleusercontent.com`
-   - Client Secret: `GOCSPX-xxxxx`
+   - Client ID: `938700376037-suq18cmtjgnbq9p00a17flv04gdlg4b0.apps.googleusercontent.com`
+   - Client Secret: `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`
 
 5. **Click "Save"**
 
@@ -50,17 +50,26 @@ You're seeing "An error occurred during Google login" because Google OAuth is no
    - Search for **"Google+ API"** or **"Google Identity"**
    - Click **"Enable"**
 
-3. **Create OAuth Credentials:**
+3. **Configure OAuth Consent Screen (if prompted):**
+   - Go to **"APIs & Services"** → **"OAuth consent screen"**
+   - If you see "User Type" options:
+     - **External**: Choose this if you want anyone with a Google account to use your app
+     - **Internal**: Only available if you have Google Workspace (G Suite) - limits to your organization
+   - If you DON'T see "User Type" option:
+     - This means your account type is already determined
+     - Just fill in the required fields:
+       - **App name**: `SitRep` (or your app name)
+       - **User support email**: Your email
+       - **Developer contact**: Your email
+   - Click **"Save and Continue"** through all steps
+   - You may need to add a test user if your app is in "Testing" mode
+
+4. **Create OAuth Credentials:**
    - Go to **"APIs & Services"** → **"Credentials"**
    - Click **"Create Credentials"** → **"OAuth client ID"**
-   - If prompted, configure OAuth consent screen first:
-     - User Type: **External** (unless you have Google Workspace)
-     - App name: **SitRep** (or your app name)
-     - User support email: Your email
-     - Developer contact: Your email
-     - Click **"Save and Continue"** through the steps
+   - If you haven't configured the consent screen, you'll be prompted to do so first
 
-4. **Create OAuth Client:**
+5. **Create OAuth Client:**
    - Application type: **Web application**
    - Name: **SitRep Web Client**
    - **Authorized JavaScript origins:**
@@ -75,7 +84,7 @@ You're seeing "An error occurred during Google login" because Google OAuth is no
      - Also add: `http://localhost:3000/auth/callback` (for local dev)
    - Click **"Create"**
 
-5. **Copy Credentials:**
+6. **Copy Credentials:**
    - A popup will show:
      - **Your Client ID** (copy this)
      - **Your Client Secret** (copy this - you won't see it again!)
