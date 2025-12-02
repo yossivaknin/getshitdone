@@ -30,21 +30,27 @@ export async function login(formData: FormData) {
   }
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
     if (error) {
-      console.error("Login error:", error.message)
+      console.error("Login error:", error.message, error)
       redirect('/login?message=' + encodeURIComponent('Login failed: ' + error.message))
+    }
+
+    if (!data.session) {
+      console.error("Login error: No session created")
+      redirect('/login?message=' + encodeURIComponent('Login failed: No session created. Please check your email for confirmation link.'))
     }
 
     revalidatePath('/', 'layout')
     redirect('/')
   } catch (error: any) {
     console.error("Login exception:", error)
-    redirect('/login?message=' + encodeURIComponent('An error occurred during login. Please try again.'))
+    const errorMsg = error?.message || 'Unknown error'
+    redirect('/login?message=' + encodeURIComponent('Login error: ' + errorMsg))
   }
 }
 
@@ -79,7 +85,7 @@ export async function signup(formData: FormData) {
     })
 
     if (error) {
-      console.error("Signup error:", error.message)
+      console.error("Signup error:", error.message, error)
       redirect('/login?message=' + encodeURIComponent('Could not create user: ' + error.message))
     }
 
@@ -99,7 +105,8 @@ export async function signup(formData: FormData) {
     redirect('/login?message=' + encodeURIComponent('Signup successful. Please check your email to confirm your account.'))
   } catch (error: any) {
     console.error("Signup exception:", error)
-    redirect('/login?message=' + encodeURIComponent('An error occurred during signup. Please try again.'))
+    const errorMsg = error?.message || 'Unknown error'
+    redirect('/login?message=' + encodeURIComponent('Signup error: ' + errorMsg))
   }
 }
 
