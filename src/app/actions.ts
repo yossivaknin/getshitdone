@@ -67,6 +67,31 @@ export async function createTask(taskData: {
     return { error: 'Not authenticated' }
   }
 
+  // Get or create workspace for the user
+  let { data: workspace } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!workspace) {
+    // Create a default workspace for the user
+    const { data: newWorkspace, error: wsError } = await supabase
+      .from('workspaces')
+      .insert({ 
+        name: 'My Workspace', 
+        owner_id: user.id 
+      })
+      .select('id')
+      .single()
+
+    if (wsError) {
+      console.error('Error creating workspace:', wsError)
+      return { error: 'Failed to create workspace: ' + wsError.message }
+    }
+    workspace = newWorkspace
+  }
+
   // Get the highest position for this status
   const { data: existingTasks } = await supabase
     .from('tasks')
@@ -88,13 +113,10 @@ export async function createTask(taskData: {
     due_date: taskData.dueDate ? new Date(taskData.dueDate).toISOString() : null,
     duration_minutes: taskData.duration || null,
     user_id: user.id,
+    workspace_id: workspace.id, // Required field
     position,
+    google_event_ids: []
   }
-  
-  // Only include google_event_ids if column exists (for backward compatibility)
-  // Check by trying to insert without it first, or just include it - Supabase will ignore if column doesn't exist
-  // Actually, let's just include it - if the column doesn't exist, we'll get an error and can handle it
-  insertData.google_event_ids = []
   
   const { data: task, error: taskError } = await supabase
     .from('tasks')
