@@ -85,7 +85,7 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
     if (open) {
       setTitle(task.title);
       setDescription(task.description || '');
-      setDuration(task.duration?.toString() || '');
+      setDuration(task.duration?.toString() || '30'); // Default to 30 minutes
       setSelectedTags(task.tags?.map(t => t.name) || []);
       
       // Set default date to today if no due date

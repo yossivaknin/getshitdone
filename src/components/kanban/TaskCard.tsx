@@ -245,10 +245,20 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                     </div>
             </div>
 
+                {/* At Risk Indicator */}
+                {isAtRisk && (
+                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
+                        <div className="bg-red-500 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm">
+                            AT RISK
+                        </div>
+                    </div>
+                )}
+
                 {/* Task Title */}
                 <h3 className={cn(
-                    "text-sm sm:text-[15px] font-semibold text-gray-800 mb-3 sm:mb-4 leading-snug",
-                    isDone && "line-through text-gray-400"
+                    "text-sm sm:text-[15px] font-semibold text-gray-800 mb-3 sm:mb-4 leading-snug pr-16 sm:pr-20",
+                    isDone && "line-through text-gray-400",
+                    isAtRisk && !isDone && "text-red-700"
                 )}>
                 {task.title}
             </h3>
