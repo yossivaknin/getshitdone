@@ -17,6 +17,11 @@ const config = {
             },
         },
         extend: {
+            fontFamily: {
+                sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+                'space-grotesk': ['var(--font-space-grotesk)', 'system-ui', 'sans-serif'],
+                mono: ['var(--font-mono)', 'monospace'],
+            },
             colors: {
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",

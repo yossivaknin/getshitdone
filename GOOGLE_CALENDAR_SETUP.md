@@ -18,7 +18,7 @@ This allows users to connect their Google Calendar to automatically schedule tas
 
 1. Go to **"APIs & Services"** → **"Library"**
 2. Search for **"Google Calendar API"**
-3. Click on it and click **"Enable"**
+3. Click on it and click **"Enable"**f
 
 ### 1.3 Configure OAuth Consent Screen
 

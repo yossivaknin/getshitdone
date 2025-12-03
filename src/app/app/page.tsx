@@ -1,0 +1,212 @@
+'use client'
+
+import { useState, useMemo, useEffect } from 'react';
+import { Board } from "@/components/kanban/Board";
+import { MissionStatus } from "@/components/mission-status";
+import { MotivatorSubtitle } from "@/components/motivator-subtitle";
+import Link from 'next/link';
+import { Settings, ChevronRight, ChevronLeft, Target, LogOut } from 'lucide-react';
+import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
+import { logout, getTasks } from '@/app/actions';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+
+// Kanban columns (these are the status columns - unified across all lists)
+const kanbanColumns = [
+  { id: 'todo', title: 'The Queue' },
+  { id: 'in-progress', title: 'Active' },
+  { id: 'done', title: 'Shipped' }
+];
+
+export default function UnifiedViewPage() {
+  const [selectedTag, setSelectedTag] = useState<string | undefined>();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  // Hide sidebar by default to prevent flickering, will be shown on desktop after mount
+  const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
+  const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
+
+  // Set initial sidebar visibility based on screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      // Show sidebar on tablet and desktop (>= 768px), hide on mobile
+      if (typeof window !== 'undefined') {
+        setIsMissionStatusVisible(window.innerWidth >= 768);
+      }
+    };
+    
+    // Check on mount
+    checkScreenSize();
+    
+    // Listen for resize events
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkScreenSize);
+      return () => window.removeEventListener('resize', checkScreenSize);
+    }
+  }, []);
+
+  // Load tasks from database on mount
+  useEffect(() => {
+    const loadTasks = async () => {
+      setIsLoading(true);
+      try {
+        const result = await getTasks();
+        if (result.error) {
+          console.error('Error loading tasks:', result.error);
+          toast.error('Failed to load tasks');
+        } else {
+          setTasks(result.tasks || []);
+        }
+      } catch (error) {
+        console.error('Error loading tasks:', error);
+        toast.error('Failed to load tasks');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTasks();
+  }, []);
+
+  // Refresh tasks when needed (after create/update/delete)
+  const refreshTasks = async () => {
+    try {
+      const result = await getTasks();
+      if (result.error) {
+        console.error('Error refreshing tasks:', result.error);
+        toast.error('Failed to refresh tasks');
+      } else {
+        setTasks(result.tasks || []);
+      }
+    } catch (error) {
+      console.error('Error refreshing tasks:', error);
+      toast.error('Failed to refresh tasks');
+    }
+  };
+
+  // Load managed tags from localStorage and sync when storage changes
+  // Only load after mount to prevent hydration mismatch
+  useEffect(() => {
+    const loadTags = () => {
+      setManagedTags(getAllTagsWithColors());
+    };
+    
+    // Load tags immediately after mount
+    loadTags();
+    
+    // Listen for storage changes (when tags are updated in settings)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'getshitdone_tags') {
+        loadTags();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom event (for same-tab updates)
+    const handleTagUpdate = () => {
+      loadTags();
+    };
+    
+    window.addEventListener('tagsUpdated', handleTagUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('tagsUpdated', handleTagUpdate);
+    };
+  }, []);
+
+  // Use managed tags instead of extracting from tasks
+  const allTagsWithColors = useMemo(() => {
+    return managedTags;
+  }, [managedTags]);
+
+  // Extract just tag names (for Board and components)
+  const allTags = useMemo(() => {
+    return managedTags.map(tag => tag.name);
+  }, [managedTags]);
+
+  return (
+    <div className="h-screen flex flex-col bg-[#F4F5F7]">
+      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5 lg:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-transparent border-b border-gray-200">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}>Mission Control</h1>
+          <p className="font-mono text-xs uppercase tracking-widest text-slate-500 mt-0.5 sm:mt-1">
+            <MotivatorSubtitle tasks={tasks} />
+          </p>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+          <button
+            onClick={() => setIsMissionStatusVisible(!isMissionStatusVisible)}
+            className={`p-2 rounded-lg transition-colors ${
+              isMissionStatusVisible 
+                ? 'bg-gray-100 text-gray-900' 
+                : 'hover:bg-white text-gray-600'
+            }`}
+            title={isMissionStatusVisible ? "Hide Mission Status" : "Show Mission Status"}
+          >
+            <Target className={`w-5 h-5 ${isMissionStatusVisible ? 'text-gray-900' : 'text-gray-600'}`} />
+          </button>
+          <Link href="/settings">
+            <button className="p-2 hover:bg-white rounded-lg transition-colors">
+              <Settings className="w-5 h-5 text-gray-600" />
+            </button>
+          </Link>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="p-2 hover:bg-white rounded-lg transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5 text-gray-600" />
+            </button>
+          </form>
+        </div>
+      </header>
+      
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        {/* Main Content - Unified Kanban Board */}
+        <main className="flex-1 overflow-hidden min-w-0 flex flex-col">
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500 font-mono">Loading tasks...</p>
+            </div>
+          ) : (
+            <Board 
+              lists={kanbanColumns} 
+              tasks={tasks}
+              workspaceId="user-workspace"
+              selectedTag={selectedTag}
+              onTasksChange={refreshTasks as any}
+              allTags={allTags}
+              onSelectTag={setSelectedTag}
+            />
+          )}
+      </main>
+
+        {/* Right Sidebar - Mission Status */}
+        {isMissionStatusVisible && (
+          <div className="hidden md:block w-56 lg:w-64 flex-shrink-0 transition-all duration-300 ease-in-out border-l border-slate-300">
+            <MissionStatus tasks={tasks} />
+          </div>
+        )}
+        
+        {/* Mobile Mission Status Drawer */}
+        {isMissionStatusVisible && (
+          <div className="md:hidden fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-white border-l border-slate-300 z-40 shadow-xl transform transition-transform duration-300 ease-in-out">
+            <MissionStatus tasks={tasks} />
+          </div>
+        )}
+        
+        {/* Mobile overlay when sidebar is open */}
+        {isMissionStatusVisible && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black/50 z-30"
+            onClick={() => setIsMissionStatusVisible(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

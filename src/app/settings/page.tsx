@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, CheckCircle2, XCircle, Loader2, Search } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Loader2, Search, ArrowLeft, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { testCalendarAPI } from '@/app/test-calendar';
 import { listCalendarEvents } from '@/app/debug-calendar';
 import { TagManager } from '@/components/tag-manager';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [workingHoursStart, setWorkingHoursStart] = useState('09:00');
@@ -167,6 +169,13 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-[#F4F5F7] p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
+          <button
+            onClick={() => router.back()}
+            className="mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
           <p className="text-gray-500">Configure your Google Calendar integration</p>
         </div>

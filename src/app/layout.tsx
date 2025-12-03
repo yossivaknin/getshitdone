@@ -23,8 +23,9 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SitRep - Mission Control",
-  description: "Tactical task management and mission control",
+  title: "SitRep | The AI-Powered Execution Engine",
+  description: "Stop planning. Start executing. SitRep auto-blocks your calendar, chunks large projects, and forces you to finish your work using AI accountability.",
+  keywords: ["productivity app", "time blocking", "google calendar integration", "kanban board", "task manager", "Get Shit Done", "auto-scheduler", "AI task manager"],
   manifest: "/manifest.json",
   themeColor: "#1F2937",
   viewport: {

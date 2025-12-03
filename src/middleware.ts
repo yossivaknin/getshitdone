@@ -43,8 +43,9 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Allow access to login page, auth callback, and API routes
-    if (request.nextUrl.pathname.startsWith('/login') || 
+    // Allow access to landing page, login page, auth callback, and API routes
+    if (request.nextUrl.pathname === '/' ||
+        request.nextUrl.pathname.startsWith('/login') || 
         request.nextUrl.pathname.startsWith('/auth/callback') ||
         request.nextUrl.pathname.startsWith('/api/')) {
       return response
@@ -73,10 +74,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Redirect to home if already authenticated and trying to access login
+    // Redirect authenticated users from login to app
     if (user && request.nextUrl.pathname.startsWith('/login')) {
       const url = request.nextUrl.clone()
-      url.pathname = '/'
+      url.pathname = '/app'
+      return NextResponse.redirect(url)
+    }
+    
+    // Redirect authenticated users from root to app
+    if (user && request.nextUrl.pathname === '/') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/app'
       return NextResponse.redirect(url)
     }
 
