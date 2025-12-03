@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { Column } from './Column'
 import toast from 'react-hot-toast'
+import { createTask, updateTask, deleteTask, updateTaskStatus } from '@/app/actions'
 
 interface BoardProps {
     lists: any[]
@@ -61,8 +62,11 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 ? newTasksOrUpdater(currentTasks)
                 : newTasksOrUpdater;
             
-            if (onTasksChange) {
-                onTasksChange(newTasks);
+            // Only call onTasksChange if it's the old signature (state updater)
+            // If it's a refresh function, don't call it here (it will be called explicitly)
+            if (onTasksChange && typeof onTasksChange !== 'function' || 
+                (typeof onTasksChange === 'function' && onTasksChange.length === 1)) {
+                (onTasksChange as (tasks: any[]) => void)(newTasks);
             }
             
             return newTasks;
@@ -94,16 +98,72 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         return acc;
     }, {});
 
-    const handleCreateTask = (newTask: any) => {
-        const newTasks = [...tasks, newTask];
-        updateTasks(newTasks);
+    const handleCreateTask = async (newTask: any) => {
+        try {
+            // Map list_id to status for database
+            const status = newTask.list_id || 'todo';
+            
+            const result = await createTask({
+                title: newTask.title,
+                description: newTask.description,
+                status: status,
+                dueDate: newTask.dueDate,
+                duration: newTask.duration,
+                tags: newTask.tags?.map((t: any) => t.name) || []
+            });
+
+            if (result.error) {
+                toast.error('Failed to create task: ' + result.error);
+                return;
+            }
+
+            toast.success('Task created successfully');
+            // Refresh tasks from database
+            if (onTasksChange) {
+                // onTasksChange can be either a refresh function or state updater
+                if (typeof onTasksChange === 'function' && onTasksChange.length === 0) {
+                    await (onTasksChange as () => Promise<void>)();
+                } else {
+                    // For backward compatibility, if it's the old signature, trigger refresh by calling with empty array
+                    // The parent will handle the refresh
+                    window.location.reload(); // Simple refresh for now
+                }
+            }
+        } catch (error: any) {
+            console.error('Error creating task:', error);
+            toast.error('Failed to create task');
+        }
     };
 
-    const handleUpdateTask = (updatedTask: any) => {
-        const newTasks = tasks.map(task => 
-            task.id === updatedTask.id ? updatedTask : task
-        );
-        updateTasks(newTasks);
+    const handleUpdateTask = async (updatedTask: any) => {
+        try {
+            // Map list_id to status for database
+            const status = updatedTask.list_id || updatedTask.status || 'todo';
+            
+            const result = await updateTask(updatedTask.id, {
+                title: updatedTask.title,
+                description: updatedTask.description,
+                status: status,
+                dueDate: updatedTask.dueDate,
+                duration: updatedTask.duration,
+                tags: updatedTask.tags?.map((t: any) => t.name) || []
+            });
+
+            if (result.error) {
+                toast.error('Failed to update task: ' + result.error);
+                return;
+            }
+
+            toast.success('Task updated successfully');
+            // Refresh tasks from database
+            if (onTasksChange) {
+                // onTasksChange is now a refresh function, call it
+                await onTasksChange();
+            }
+        } catch (error: any) {
+            console.error('Error updating task:', error);
+            toast.error('Failed to update task');
+        }
     };
 
     const handleDeleteTask = async (taskId: string) => {
@@ -132,12 +192,24 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             }
         }
 
-        // Remove the task from state
-        updateTasks((currentTasks) => 
-            currentTasks.filter((t: any) => t.id !== taskId)
-        );
-        
-        toast.success('Task deleted successfully');
+        // Delete from database
+        try {
+            const result = await deleteTask(taskId);
+            if (result.error) {
+                toast.error('Failed to delete task: ' + result.error);
+                return;
+            }
+
+            toast.success('Task deleted successfully');
+            // Refresh tasks from database
+            if (onTasksChange) {
+                // onTasksChange is now a refresh function, call it
+                await onTasksChange();
+            }
+        } catch (error: any) {
+            console.error('Error deleting task:', error);
+            toast.error('Failed to delete task');
+        }
     };
 
     const handleDragStart = (event: any) => {
@@ -198,7 +270,21 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         const isMovingToDone = newListId === 'done';
         const isMovingFromDone = oldListId === 'done';
 
-        // Update task list_id IMMEDIATELY (before async operations)
+        // Update task status in database
+        try {
+            const result = await updateTaskStatus(taskId, newListId);
+            if (result.error) {
+                console.error('[DRAG] Error updating task status:', result.error);
+                toast.error('Failed to update task status');
+                return; // Don't update UI if database update failed
+            }
+        } catch (error) {
+            console.error('[DRAG] Error updating task status:', error);
+            toast.error('Failed to update task status');
+            return;
+        }
+
+        // Update task list_id IMMEDIATELY (after successful DB update)
         let updatedTask = { ...task, list_id: newListId };
         
         // Update task in state IMMEDIATELY so it appears in the new column

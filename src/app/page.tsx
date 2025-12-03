@@ -7,94 +7,10 @@ import { MotivatorSubtitle } from "@/components/motivator-subtitle";
 import Link from 'next/link';
 import { Settings, ChevronRight, ChevronLeft, Target, LogOut } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
-import { logout } from './actions';
-
-// Mock data - in production this would come from your database
-const mockLists = [
-  { id: 'list-1', title: 'Work Projects', taskCount: 5 },
-  { id: 'list-2', title: 'Personal', taskCount: 3 },
-  { id: 'list-3', title: 'Learning', taskCount: 2 },
-];
-
-// Helper function to get tag color - uses fallback for SSR, will be updated on client
-const getTagColorForMock = (tagName: string): string => {
-  const LIGHT_TAG_COLORS = [
-    'bg-yellow-50 text-yellow-600 border-yellow-200',
-    'bg-red-50 text-red-600 border-red-200',
-    'bg-blue-50 text-blue-600 border-blue-200',
-    'bg-green-50 text-green-600 border-green-200',
-    'bg-purple-50 text-purple-600 border-purple-200',
-  ];
-  const index = tagName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % LIGHT_TAG_COLORS.length;
-  return LIGHT_TAG_COLORS[index];
-};
-
-// All tasks from all lists - unified view
-// Note: Tag colors will be updated on client-side to use managed tags
-const initialMockTasks = [
-  {
-    id: '1',
-    list_id: 'todo',
-    title: 'Figure out the link for multi-user workspaces',
-    tags: [{ name: 'Dev', color: getTagColorForMock('Dev') }],
-    dueDate: new Date().toISOString().split('T')[0], // Today as ISO
-    duration: 30,
-    googleEventIds: []
-  },
-  {
-    id: '2',
-    list_id: 'todo',
-    title: 'Personal Commitment Review',
-    tags: [{ name: 'Personal', color: getTagColorForMock('Personal') }],
-    dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow as ISO
-    duration: 60,
-    googleEventIds: []
-  },
-  {
-    id: '3',
-    list_id: 'in-progress',
-    title: 'E2E testing review',
-    tags: [{ name: 'QA', color: getTagColorForMock('QA') }],
-    duration: 45,
-    googleEventIds: []
-  },
-  {
-    id: '4',
-    list_id: 'done',
-    title: 'Schedule an appointment for Sivan',
-    tags: [{ name: 'Admin', color: getTagColorForMock('Admin') }],
-    dueDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Yesterday as ISO
-    duration: 15,
-    googleEventIds: []
-  },
-  {
-    id: '5',
-    list_id: 'todo',
-    title: 'Review Q4 Performance',
-    tags: [{ name: 'Work', color: getTagColorForMock('Work') }],
-    dueDate: '2024-12-01',
-    duration: 90,
-    googleEventIds: []
-  },
-  {
-    id: '6',
-    list_id: 'in-progress',
-    title: 'Prepare for client demo',
-    tags: [{ name: 'Dev', color: getTagColorForMock('Dev') }],
-    dueDate: '2024-12-05',
-    duration: 120,
-    googleEventIds: []
-  },
-  {
-    id: '7',
-    list_id: 'done',
-    title: 'Plan weekend getaway',
-    tags: [{ name: 'Personal', color: getTagColorForMock('Personal') }],
-    dueDate: '2024-11-30',
-    duration: 45,
-    googleEventIds: []
-  },
-];
+import { logout, getTasks } from './actions';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { revalidatePath } from 'next/cache';
 
 // Kanban columns (these are the status columns - unified across all lists)
 const kanbanColumns = [
@@ -105,7 +21,9 @@ const kanbanColumns = [
 
 export default function UnifiedViewPage() {
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
-  const [tasks, setTasks] = useState(initialMockTasks);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
   // Hide sidebar by default to prevent flickering, will be shown on desktop after mount
   const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
@@ -128,6 +46,45 @@ export default function UnifiedViewPage() {
       return () => window.removeEventListener('resize', checkScreenSize);
     }
   }, []);
+
+  // Load tasks from database on mount
+  useEffect(() => {
+    const loadTasks = async () => {
+      setIsLoading(true);
+      try {
+        const result = await getTasks();
+        if (result.error) {
+          console.error('Error loading tasks:', result.error);
+          toast.error('Failed to load tasks');
+        } else {
+          setTasks(result.tasks || []);
+        }
+      } catch (error) {
+        console.error('Error loading tasks:', error);
+        toast.error('Failed to load tasks');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTasks();
+  }, []);
+
+  // Refresh tasks when needed (after create/update/delete)
+  const refreshTasks = async () => {
+    try {
+      const result = await getTasks();
+      if (result.error) {
+        console.error('Error refreshing tasks:', result.error);
+        toast.error('Failed to refresh tasks');
+      } else {
+        setTasks(result.tasks || []);
+      }
+    } catch (error) {
+      console.error('Error refreshing tasks:', error);
+      toast.error('Failed to refresh tasks');
+    }
+  };
 
   // Load managed tags from localStorage and sync when storage changes
   // Only load after mount to prevent hydration mismatch
@@ -212,16 +169,22 @@ export default function UnifiedViewPage() {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Main Content - Unified Kanban Board */}
         <main className="flex-1 overflow-hidden min-w-0 flex flex-col">
-          <Board 
-            lists={kanbanColumns} 
-            tasks={tasks}
-            workspaceId="mock-workspace-id"
-            selectedTag={selectedTag}
-            onTasksChange={setTasks}
-            allTags={allTags}
-            onSelectTag={setSelectedTag}
-          />
-        </main>
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500 font-mono">Loading tasks...</p>
+            </div>
+          ) : (
+            <Board 
+              lists={kanbanColumns} 
+              tasks={tasks}
+              workspaceId="user-workspace"
+              selectedTag={selectedTag}
+              onTasksChange={refreshTasks as any}
+              allTags={allTags}
+              onSelectTag={setSelectedTag}
+            />
+          )}
+      </main>
 
         {/* Right Sidebar - Mission Status */}
         {isMissionStatusVisible && (
