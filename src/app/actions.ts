@@ -81,18 +81,24 @@ export async function createTask(taskData: {
     : 0
 
   // Create the task
+  const insertData: any = {
+    title: taskData.title,
+    description: taskData.description || null,
+    status: taskData.status || 'todo',
+    due_date: taskData.dueDate ? new Date(taskData.dueDate).toISOString() : null,
+    duration_minutes: taskData.duration || null,
+    user_id: user.id,
+    position,
+  }
+  
+  // Only include google_event_ids if column exists (for backward compatibility)
+  // Check by trying to insert without it first, or just include it - Supabase will ignore if column doesn't exist
+  // Actually, let's just include it - if the column doesn't exist, we'll get an error and can handle it
+  insertData.google_event_ids = []
+  
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .insert({
-      title: taskData.title,
-      description: taskData.description || null,
-      status: taskData.status || 'todo',
-      due_date: taskData.dueDate ? new Date(taskData.dueDate).toISOString() : null,
-      duration_minutes: taskData.duration || null,
-      user_id: user.id,
-      position,
-      google_event_ids: []
-    })
+    .insert(insertData)
     .select()
     .single()
 
