@@ -58,8 +58,8 @@ export async function login(formData: FormData) {
       redirect('/login?message=' + encodeURIComponent('Please check your email and confirm your account before signing in.'))
     }
 
-    revalidatePath('/', 'layout')
-    redirect('/')
+    revalidatePath('/app', 'layout')
+    redirect('/app')
   } catch (error: any) {
     // Next.js redirect() throws NEXT_REDIRECT error - this is expected, don't catch it
     if (error?.digest?.startsWith('NEXT_REDIRECT')) {
@@ -126,8 +126,8 @@ export async function signup(formData: FormData) {
 
     // User is signed in (email confirmation disabled or auto-confirmed)
     if (data.session) {
-      revalidatePath('/', 'layout')
-      redirect('/')
+      revalidatePath('/app', 'layout')
+      redirect('/app')
     }
 
     // Fallback: redirect to login with confirmation message
