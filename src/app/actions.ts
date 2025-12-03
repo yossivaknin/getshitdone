@@ -143,22 +143,38 @@ export async function createTask(taskData: {
     return { error: taskError.message }
   }
 
-  // Create tags if provided
+  // Handle tags - your schema has tags as an array column
+  // Update the task with tags array if provided
   if (taskData.tags && taskData.tags.length > 0 && task) {
-    const tagInserts = taskData.tags.map(tagName => ({
-      task_id: task.id,
-      name: tagName,
-      color: null // Will be managed client-side
-    }))
-
     const { error: tagsError } = await supabase
-      .from('tags')
-      .insert(tagInserts)
+      .from('tasks')
+      .update({ tags: taskData.tags })
+      .eq('id', task.id)
 
     if (tagsError) {
-      console.error('Error creating tags:', tagsError)
-      // Don't fail the whole operation if tags fail
+      console.error('Error updating tags array:', tagsError)
+      // Fallback: try separate tags table if it exists
+      const tagInserts = taskData.tags.map(tagName => ({
+        task_id: task.id,
+        name: tagName,
+        color: null
+      }))
+
+      const { error: separateTagsError } = await supabase
+        .from('tags')
+        .insert(tagInserts)
+
+      if (separateTagsError) {
+        console.error('Error creating tags in separate table:', separateTagsError)
+        // Don't fail the whole operation if tags fail
+      }
     }
+  } else if (task) {
+    // Ensure tags is an empty array if no tags provided
+    await supabase
+      .from('tasks')
+      .update({ tags: [] })
+      .eq('id', task.id)
   }
 
   revalidatePath('/')
