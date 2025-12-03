@@ -8,6 +8,7 @@ export interface Task {
   dueDate?: string | Date;
   list_id: string;
   chunkCount?: number; // Manual chunk count override
+  chunkDuration?: number; // Duration per chunk in minutes (if manual chunking)
 }
 
 export interface ScheduleResult {
@@ -88,14 +89,18 @@ export async function smartSchedule(
   
   // If manual chunk count is specified, use it
   if (task.chunkCount && task.chunkCount > 1) {
-    const chunkDuration = Math.ceil(duration / task.chunkCount);
-    chunks = Array(task.chunkCount).fill(chunkDuration);
+    // Use specified chunk duration if provided, otherwise calculate evenly
+    const perChunkDuration = task.chunkDuration || Math.ceil(duration / task.chunkCount);
+    chunks = Array(task.chunkCount).fill(perChunkDuration);
     // Adjust last chunk if needed to match total duration
     const total = chunks.reduce((a, b) => a + b, 0);
     if (total > duration) {
       chunks[chunks.length - 1] -= (total - duration);
+    } else if (total < duration) {
+      // If chunks don't add up to total, add remainder to last chunk
+      chunks[chunks.length - 1] += (duration - total);
     }
-    console.log(`Task will be manually split into ${chunks.length} chunk(s):`, chunks);
+    console.log(`Task will be manually split into ${chunks.length} chunk(s) of ${perChunkDuration} min each:`, chunks);
   } else {
     // Automatic chunking: split into 1-hour chunks
     let remaining = duration;

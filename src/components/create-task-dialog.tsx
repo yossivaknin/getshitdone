@@ -45,7 +45,7 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [duration, setDuration] = useState('');
+  const [duration, setDuration] = useState('30'); // Default to 30 minutes
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);

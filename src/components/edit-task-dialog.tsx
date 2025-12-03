@@ -41,10 +41,11 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
   const [dueDate, setDueDate] = useState('');
-  const [duration, setDuration] = useState(task.duration?.toString() || '');
+  const [duration, setDuration] = useState(task.duration?.toString() || '30'); // Default to 30 minutes
   const [selectedTags, setSelectedTags] = useState<string[]>(task.tags?.map(t => t.name) || []);
   const [manualChunking, setManualChunking] = useState(false);
   const [chunkCount, setChunkCount] = useState(1);
+  const [chunkDuration, setChunkDuration] = useState(30); // Duration per chunk in minutes
   const [isScheduling, setIsScheduling] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);
@@ -202,13 +203,19 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       // Handle empty string vs undefined for dueDate
       const finalDueDate = dueDate && dueDate.trim() !== '' ? dueDate : (task.dueDate || undefined);
       
+      // Calculate total duration if manual chunking is enabled
+      const finalDuration = manualChunking && chunkCount > 1 
+        ? chunkCount * chunkDuration 
+        : taskDuration;
+
       const result = await scheduleTask({
         id: task.id,
         title,
-        duration: taskDuration,
+        duration: finalDuration,
         dueDate: finalDueDate,
         list_id: task.list_id || 'todo',
         chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
+        chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
       }, accessToken, refreshToken || undefined);
       
       if (result.success) {
@@ -414,12 +421,13 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
             {manualChunking && (
               <>
                 <p className="text-xs sm:text-sm text-gray-600 font-medium">
-                  Auto-splitting large tasks into calendar blocks.
+                  Split task into manageable calendar blocks.
                 </p>
-                <div className="space-y-1.5 sm:space-y-2 pl-0 sm:pl-6">
-                  <Label htmlFor="chunk-count" className="text-xs sm:text-sm text-gray-600">
-                    Number of chunks
-                  </Label>
+                <div className="space-y-3 sm:space-y-4 pl-0 sm:pl-6">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="chunk-count" className="text-xs sm:text-sm text-gray-600">
+                      Number of chunks
+                    </Label>
                     <Input
                       id="chunk-count"
                       type="number"
@@ -439,9 +447,34 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
                       max="10"
                       className="w-full sm:w-32 h-9 border-2 border-slate-300 text-sm"
                     />
+                  </div>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="chunk-duration" className="text-xs sm:text-sm text-gray-600">
+                      Duration per chunk (minutes)
+                    </Label>
+                    <Input
+                      id="chunk-duration"
+                      type="number"
+                      value={chunkDuration}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '') {
+                          setChunkDuration(30);
+                        } else {
+                          const num = parseInt(value);
+                          if (!isNaN(num) && num >= 15) {
+                            setChunkDuration(Math.min(240, Math.max(15, num)));
+                          }
+                        }
+                      }}
+                      min="15"
+                      max="240"
+                      className="w-full sm:w-32 h-9 border-2 border-slate-300 text-sm"
+                    />
+                  </div>
                   {duration && (
                     <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                      Each chunk will be ~{Math.ceil(parseInt(duration) / chunkCount)} minutes
+                      Total: {chunkCount} chunks × {chunkDuration} min = {chunkCount * chunkDuration} minutes
                     </p>
                   )}
                 </div>

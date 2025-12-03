@@ -341,6 +341,7 @@ export async function scheduleTask(
     dueDate?: string
     list_id: string
     chunkCount?: number
+    chunkDuration?: number
   },
   accessToken: string,
   refreshToken?: string
@@ -411,7 +412,8 @@ export async function scheduleTask(
       duration: taskData.duration,
       dueDate: dueDate,
       list_id: taskData.list_id,
-      chunkCount: taskData.chunkCount
+      chunkCount: taskData.chunkCount,
+      chunkDuration: taskData.chunkDuration
     }
 
     // Schedule the task

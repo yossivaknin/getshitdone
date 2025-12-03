@@ -45,8 +45,47 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
 
     const isDone = task.list_id === 'done';
     
+    // Calculate if task is "at risk" - likely to be missed
+    const isAtRisk = (() => {
+        if (isDone || !task.dueDate || !task.duration) return false;
+        
+        try {
+            const dueDate = new Date(task.dueDate);
+            const now = new Date();
+            const timeUntilDue = dueDate.getTime() - now.getTime();
+            
+            // If due date is in the past, it's at risk
+            if (timeUntilDue < 0) return true;
+            
+            // Calculate available working hours until due date
+            // Assume 9 hours per day (9 AM to 6 PM)
+            const workingHoursPerDay = 9;
+            const workingMinutesPerDay = workingHoursPerDay * 60;
+            
+            // Calculate days until due (excluding today if it's past working hours)
+            const daysUntilDue = Math.ceil(timeUntilDue / (1000 * 60 * 60 * 24));
+            
+            // If less than 1 day, check if we have enough hours today
+            if (daysUntilDue === 0) {
+                const hoursRemainingToday = Math.max(0, 18 - now.getHours());
+                return task.duration > hoursRemainingToday * 60;
+            }
+            
+            // Calculate total available minutes
+            const availableMinutes = daysUntilDue * workingMinutesPerDay;
+            
+            // Task is at risk if duration exceeds available time
+            // Add 20% buffer for safety
+            return task.duration > availableMinutes * 0.8;
+        } catch {
+            return false;
+        }
+    })();
+    
     // Get status stripe color based on column (thick left border)
     const getStatusStripeColor = () => {
+        // At-risk tasks get red border
+        if (isAtRisk) return 'border-l-4 border-l-red-500';
         if (task.list_id === 'todo') return 'border-l-4 border-l-slate-400';
         if (task.list_id === 'in-progress') return 'border-l-4 border-l-amber-500';
         if (task.list_id === 'done') return 'border-l-4 border-l-emerald-500';
@@ -69,7 +108,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
         // Don't open if clicking on drag handle area (left side)
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const clickX = 'touches' in e ? e.touches[0]?.clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
-        if (clickX < 50) { // Left 50px is drag handle area
+        if (clickX < 40) { // Left 40px is drag handle area
             return;
         }
         
@@ -171,7 +210,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 style={style}
                 {...attributes}
                         className={cn(
-                    "p-3 sm:p-3.5 md:p-4 pl-14 sm:pl-16 md:pl-20 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer group relative w-full",
+                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer group relative w-full",
                     getStatusStripeColor(),
                     isDone ? "bg-slate-50 opacity-50 grayscale" : "bg-white",
                     isDragging && "scale-105 opacity-50"
@@ -182,7 +221,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 {/* Drag handle - only this area is draggable */}
                 <div 
                     {...listeners}
-                    className="drag-handle absolute left-0 top-0 bottom-0 w-12 sm:w-14 md:w-16 cursor-grab active:cursor-grabbing flex items-center justify-center z-10 pointer-events-auto"
+                    className="drag-handle absolute left-0 top-0 bottom-0 w-10 sm:w-12 md:w-14 cursor-grab active:cursor-grabbing flex items-center justify-center z-10 pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
