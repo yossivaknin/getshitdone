@@ -32,6 +32,8 @@ interface BoardProps {
 export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag }: BoardProps) {
     const [tasks, setTasks] = useState(initialTasks);
     const skipSyncRef = useRef(false);
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [createDialogListId, setCreateDialogListId] = useState<string>('todo'); // Default to first column
     
     // Sync with external changes, but skip if we just made a local update
     useEffect(() => {

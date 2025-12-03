@@ -24,10 +24,24 @@ interface CreateTaskDialogProps {
   trigger?: React.ReactNode;
   onCreateTask: (task: any) => void;
   allTags?: string[]; // All existing tags from all tasks
+  open?: boolean; // Controlled mode - if provided, dialog is controlled externally
+  onOpenChange?: (open: boolean) => void; // Callback when open state changes
 }
 
-export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCreateTask, allTags = [] }: CreateTaskDialogProps) {
-  const [open, setOpen] = useState(false);
+export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCreateTask, allTags = [], open: controlledOpen, onOpenChange }: CreateTaskDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Use controlled open if provided, otherwise use internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (newOpen: boolean) => {
+    if (controlledOpen !== undefined) {
+      // Controlled mode - notify parent
+      onOpenChange?.(newOpen);
+    } else {
+      // Uncontrolled mode - use internal state
+      setInternalOpen(newOpen);
+    }
+  };
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
