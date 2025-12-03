@@ -22,10 +22,7 @@ export async function getTasks() {
 
   const { data: tasks, error } = await supabase
     .from('tasks')
-    .select(`
-      *,
-      tags:tags(*)
-    `)
+    .select('*')
     .eq('user_id', user.id)
     .order('position', { ascending: true })
 
@@ -35,19 +32,36 @@ export async function getTasks() {
   }
 
   // Transform tasks to match the app's expected format
-  const transformedTasks = (tasks || []).map(task => ({
-    id: task.id,
-    list_id: task.status || 'todo', // Map status to list_id for kanban columns
-    title: task.title,
-    description: task.description,
-    tags: (task.tags || []).map((tag: any) => ({
-      name: tag.name,
-      color: tag.color || 'bg-gray-100 text-gray-700'
-    })),
-    dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : undefined,
-    duration: task.duration_minutes,
-    googleEventIds: task.google_event_ids || []
-  }))
+  const transformedTasks = (tasks || []).map(task => {
+    // Handle tags - your schema has tags as an array column
+    // Try to get tags from array column first, fallback to separate table
+    let taskTags: any[] = []
+    
+    if (Array.isArray(task.tags)) {
+      // Tags is an array column (your current schema)
+      taskTags = task.tags.map((tagName: string) => ({
+        name: tagName,
+        color: 'bg-gray-100 text-gray-700' // Default color, will be managed client-side
+      }))
+    } else if (task.tags && typeof task.tags === 'object') {
+      // Tags might be from a join (separate table)
+      taskTags = Array.isArray(task.tags) ? task.tags.map((tag: any) => ({
+        name: tag.name,
+        color: tag.color || 'bg-gray-100 text-gray-700'
+      })) : []
+    }
+    
+    return {
+      id: task.id,
+      list_id: task.status || 'todo', // Map status to list_id for kanban columns
+      title: task.title,
+      description: task.description,
+      tags: taskTags,
+      dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : undefined,
+      duration: task.duration_minutes,
+      googleEventIds: task.google_event_ids || []
+    }
+  })
 
   return { tasks: transformedTasks, error: null }
 }
