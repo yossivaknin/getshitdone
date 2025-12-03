@@ -73,12 +73,15 @@ export async function smartSchedule(
   busySlots: TimeSlot[]
 ): Promise<ScheduleResult> {
   const duration = task.duration || 60; // Default 1 hour
+  const duration = task.duration || 60; // Default 1 hour
   const dueDate = parseDueDate(task.dueDate);
   const now = new Date();
   
   console.log('Smart scheduling:', {
     task: task.title,
     duration,
+    chunkCount: task.chunkCount,
+    chunkDuration: task.chunkDuration,
     dueDate: dueDate.toISOString(),
     now: now.toISOString(),
     busySlotsCount: busySlots.length
@@ -88,19 +91,25 @@ export async function smartSchedule(
   let chunks: number[] = [];
   
   // If manual chunk count is specified, use it
-  if (task.chunkCount && task.chunkCount > 1) {
-    // Use specified chunk duration if provided, otherwise calculate evenly
-    const perChunkDuration = task.chunkDuration || Math.ceil(duration / task.chunkCount);
+  if (task.chunkCount && task.chunkCount > 1 && task.chunkDuration) {
+    // Use specified chunk duration directly - don't adjust to match total duration
+    // The total duration is chunkCount * chunkDuration, so we create exactly that many chunks
+    const perChunkDuration = task.chunkDuration;
+    chunks = Array(task.chunkCount).fill(perChunkDuration);
+    console.log(`Task will be manually split into ${chunks.length} chunk(s) of ${perChunkDuration} min each:`, chunks);
+    console.log(`Total duration: ${chunks.length * perChunkDuration} minutes`);
+  } else if (task.chunkCount && task.chunkCount > 1) {
+    // Manual chunking without specified duration - calculate evenly
+    const perChunkDuration = Math.ceil(duration / task.chunkCount);
     chunks = Array(task.chunkCount).fill(perChunkDuration);
     // Adjust last chunk if needed to match total duration
     const total = chunks.reduce((a, b) => a + b, 0);
     if (total > duration) {
       chunks[chunks.length - 1] -= (total - duration);
     } else if (total < duration) {
-      // If chunks don't add up to total, add remainder to last chunk
       chunks[chunks.length - 1] += (duration - total);
     }
-    console.log(`Task will be manually split into ${chunks.length} chunk(s) of ${perChunkDuration} min each:`, chunks);
+    console.log(`Task will be manually split into ${chunks.length} chunk(s) of ~${perChunkDuration} min each:`, chunks);
   } else {
     // Automatic chunking: split into 1-hour chunks
     let remaining = duration;
