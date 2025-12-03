@@ -329,6 +329,117 @@ export async function updateTaskStatus(taskId: string, newStatus: string, newPos
     return { error: error.message }
   }
 
-  revalidatePath('/')
+  revalidatePath('/app')
   return { error: null }
+}
+
+export async function scheduleTask(
+  taskData: {
+    id: string
+    title: string
+    duration: number
+    dueDate?: string
+    list_id: string
+    chunkCount?: number
+  },
+  accessToken: string,
+  refreshToken?: string
+) {
+  try {
+    // Import scheduling functions
+    const { smartSchedule, Task } = await import('@/lib/smart-schedule')
+    const { getBusySlots, CalendarConfig } = await import('@/lib/calendar')
+    const { refreshAccessToken } = await import('@/lib/token-refresh')
+
+    // Validate access token
+    let validToken = accessToken
+
+    // Check if token is valid, refresh if needed
+    if (refreshToken) {
+      const tokenTest = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`)
+      if (!tokenTest.ok) {
+        console.log('[SCHEDULE] Token expired, refreshing...')
+        const newToken = await refreshAccessToken(refreshToken)
+        if (newToken) {
+          validToken = newToken
+          // Update localStorage on client side would be ideal, but we can't do that from server
+          // The client should handle token refresh
+        } else {
+          return {
+            success: false,
+            message: 'Token expired and refresh failed. Please reconnect your Google Calendar in Settings.',
+            eventsCreated: 0
+          }
+        }
+      }
+    }
+
+    // Parse due date
+    let dueDate: Date
+    if (taskData.dueDate) {
+      const parsed = new Date(taskData.dueDate)
+      if (!isNaN(parsed.getTime())) {
+        dueDate = parsed
+      } else {
+        // Default to 7 days from now
+        dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    } else {
+      // Default to 7 days from now
+      dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    }
+
+    // Set end date to end of working day
+    dueDate.setHours(18, 0, 0, 0)
+
+    // Create calendar config
+    const config: CalendarConfig = {
+      accessToken: validToken,
+      refreshToken: refreshToken,
+      workingHoursStart: '09:00',
+      workingHoursEnd: '18:00'
+    }
+
+    // Get busy slots from now until due date
+    const now = new Date()
+    const busySlots = await getBusySlots(config, now, dueDate)
+
+    // Create task object for smartSchedule
+    const task: Task = {
+      id: taskData.id,
+      title: taskData.title,
+      duration: taskData.duration,
+      dueDate: dueDate,
+      list_id: taskData.list_id,
+      chunkCount: taskData.chunkCount
+    }
+
+    // Schedule the task
+    const result = await smartSchedule(task, config, busySlots)
+
+    if (result.success && result.eventIds) {
+      // Update task in database with event IDs
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        await supabase
+          .from('tasks')
+          .update({ google_event_ids: result.eventIds })
+          .eq('id', taskData.id)
+          .eq('user_id', user.id)
+      }
+
+      revalidatePath('/app')
+    }
+
+    return result
+  } catch (error: any) {
+    console.error('[SCHEDULE] Error scheduling task:', error)
+    return {
+      success: false,
+      message: error?.message || 'Failed to schedule task. Please check your calendar connection.',
+      eventsCreated: 0
+    }
+  }
 }
