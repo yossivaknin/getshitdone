@@ -81,6 +81,31 @@ export async function createTask(taskData: {
     return { error: 'Not authenticated' }
   }
 
+  // Ensure profile exists (workspaces.owner_id references profiles.id)
+  let { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    // Create profile if it doesn't exist
+    const { data: newProfile, error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: user.id,
+        email: user.email || null
+      })
+      .select('id')
+      .single()
+
+    if (profileError) {
+      console.error('Error creating profile:', profileError)
+      return { error: 'Failed to create profile: ' + profileError.message }
+    }
+    profile = newProfile
+  }
+
   // Get or create workspace for the user
   let { data: workspace } = await supabase
     .from('workspaces')
