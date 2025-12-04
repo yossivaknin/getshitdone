@@ -153,9 +153,21 @@ export function findFreeSlots(
   while (currentDate < endDate && daysChecked < maxDays) {
     const slotEnd = new Date(currentDate.getTime() + durationMinutes * 60 * 1000);
     
-    // Check if slot is within working hours
-    const slotHour = slotEnd.getHours();
-    if (slotHour >= endHour && slotEnd.getMinutes() > endMin) {
+    // Check if slot start is within working hours
+    const slotStartHour = currentDate.getHours();
+    const slotStartMin = currentDate.getMinutes();
+    const slotEndHour = slotEnd.getHours();
+    const slotEndMin = slotEnd.getMinutes();
+    
+    // Check if slot starts before working hours
+    if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
+      // Move to start of working hours today
+      currentDate.setHours(startHour, startMin, 0, 0);
+      continue;
+    }
+    
+    // Check if slot ends after working hours
+    if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
       // Move to next day
       currentDate.setDate(currentDate.getDate() + 1);
       currentDate.setHours(startHour, startMin, 0, 0);

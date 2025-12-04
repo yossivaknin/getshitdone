@@ -378,6 +378,10 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         console.log('[DRAG] Re-scheduling task:', task.title);
 
         try {
+            // Get working hours from localStorage
+            const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
+            const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+
             const { scheduleTask } = await import('@/app/actions');
             const result = await scheduleTask(
                 {
@@ -388,7 +392,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     list_id: task.list_id
                 },
                 accessToken,
-                refreshToken || undefined
+                refreshToken || undefined,
+                workingHoursStart,
+                workingHoursEnd
             );
 
             if (result.success && result.eventIds) {
