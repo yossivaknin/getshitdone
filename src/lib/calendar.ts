@@ -151,6 +151,7 @@ export function findFreeSlots(
   let daysChecked = 0;
   
   while (currentDate < endDate && daysChecked < maxDays) {
+    // Calculate slot end first
     const slotEnd = new Date(currentDate.getTime() + durationMinutes * 60 * 1000);
     
     // Check if slot start is within working hours
@@ -175,12 +176,16 @@ export function findFreeSlots(
       continue;
     }
     
-    // Check if slot conflicts with busy slots
+    // Check if slot conflicts with busy slots - improved conflict detection
     const hasConflict = sortedBusy.some(busy => {
+      const slotStart = currentDate.getTime();
+      const slotEndTime = slotEnd.getTime();
+      const busyStart = busy.start.getTime();
+      const busyEnd = busy.end.getTime();
+      
+      // Check for any overlap: slots overlap if one starts before the other ends
       return (
-        (currentDate >= busy.start && currentDate < busy.end) ||
-        (slotEnd > busy.start && slotEnd <= busy.end) ||
-        (currentDate <= busy.start && slotEnd >= busy.end)
+        (slotStart < busyEnd && slotEndTime > busyStart)
       );
     });
     
