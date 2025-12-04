@@ -116,7 +116,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
             if (result.error) {
                 toast.error('Failed to create task: ' + result.error);
-                return;
+                return null;
             }
 
             toast.success('Task created successfully');
@@ -131,9 +131,13 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     window.location.reload(); // Simple refresh for now
                 }
             }
+            
+            // Return the created task with its database ID
+            return result.task;
         } catch (error: any) {
             console.error('Error creating task:', error);
             toast.error('Failed to create task');
+            return null;
         }
     };
 

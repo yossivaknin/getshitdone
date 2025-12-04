@@ -209,7 +209,7 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
 
       // First create the task
       const newTask = {
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Temporary ID, will be replaced
         list_id: listId,
         title,
         description,
@@ -221,13 +221,18 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
         duration: finalDuration,
       };
 
-      // Create task first
-      onCreateTask(newTask);
+      // Create task first and wait for the actual task ID
+      const createdTask = await onCreateTask(newTask);
+      
+      if (!createdTask || !createdTask.id) {
+        toast.error('Failed to create task. Cannot schedule.');
+        setIsScheduling(false);
+        return;
+      }
 
-      // Then schedule it (we'll need to get the actual task ID from the server)
-      // For now, we'll use a temporary ID and the server will handle it
+      // Now schedule it with the actual task ID from the database
       const result = await scheduleTask({
-        id: newTask.id, // This will be replaced by the actual task ID from the server
+        id: createdTask.id, // Use the actual database ID
         title,
         duration: finalDuration,
         dueDate: dueDate || undefined,
