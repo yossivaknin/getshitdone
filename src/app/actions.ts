@@ -21,11 +21,12 @@ export async function getTasks() {
   }
 
   // Fetch tasks with tags from separate table
+  // Use left join to handle cases where tasks have no tags
   const { data: tasks, error } = await supabase
     .from('tasks')
     .select(`
       *,
-      tags:tags(name, color)
+      tags:tags!left(name, color)
     `)
     .eq('user_id', user.id)
     .order('position', { ascending: true })
