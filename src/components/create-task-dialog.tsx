@@ -24,7 +24,7 @@ interface CreateTaskDialogProps {
   workspaceId: string;
   children?: React.ReactNode;
   trigger?: React.ReactNode;
-  onCreateTask: (task: any) => void;
+  onCreateTask: (task: any) => Promise<any> | any; // Can return the created task or void
   allTags?: string[]; // All existing tags from all tasks
   open?: boolean; // Controlled mode - if provided, dialog is controlled externally
   onOpenChange?: (open: boolean) => void; // Callback when open state changes
