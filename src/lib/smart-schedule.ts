@@ -127,14 +127,23 @@ export async function smartSchedule(
   // Find free slots for all chunks
   const allFreeSlots: TimeSlot[] = [];
   let currentTime = now;
-  // Track scheduled slots so they don't overlap
-  const scheduledSlots: TimeSlot[] = [...busySlots];
+  // Track scheduled slots so they don't overlap - make a deep copy to avoid reference issues
+  const scheduledSlots: TimeSlot[] = busySlots.map(slot => ({
+    start: new Date(slot.start),
+    end: new Date(slot.end)
+  }));
+  
+  // Sort busy slots by start time for efficient conflict checking
+  scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+  
+  console.log(`[SMART-SCHEDULE] Starting with ${scheduledSlots.length} busy slots from calendar`);
   
   for (let i = 0; i < chunks.length; i++) {
     const chunkDuration = chunks[i];
-    console.log(`Finding slot for chunk ${i + 1}/${chunks.length} (${chunkDuration} minutes)`);
-    console.log(`Current time: ${currentTime.toISOString()}`);
-    console.log(`Already scheduled ${scheduledSlots.length - busySlots.length} chunk(s)`);
+    console.log(`[SMART-SCHEDULE] Finding slot for chunk ${i + 1}/${chunks.length} (${chunkDuration} minutes)`);
+    console.log(`[SMART-SCHEDULE] Current time: ${currentTime.toISOString()}`);
+    console.log(`[SMART-SCHEDULE] Already scheduled ${scheduledSlots.length - busySlots.length} chunk(s) in this task`);
+    console.log(`[SMART-SCHEDULE] Total busy slots: ${scheduledSlots.length}`);
     
     // Find free slots, excluding already scheduled chunks
     const freeSlots = findFreeSlots(
@@ -146,7 +155,7 @@ export async function smartSchedule(
       chunkDuration
     );
     
-    console.log(`Found ${freeSlots.length} free slot(s) for chunk ${i + 1}`);
+    console.log(`[SMART-SCHEDULE] Found ${freeSlots.length} free slot(s) for chunk ${i + 1}`);
     
     if (freeSlots.length === 0) {
       return {
@@ -159,16 +168,19 @@ export async function smartSchedule(
     // Use the first available slot
     const selectedSlot = freeSlots[0];
     allFreeSlots.push(selectedSlot);
-    console.log(`Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
+    console.log(`[SMART-SCHEDULE] Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
     
-    // Add this slot to scheduledSlots so next chunk won't use it
-    scheduledSlots.push(selectedSlot);
+    // Add this slot to scheduledSlots so next chunk won't use it (deep copy)
+    scheduledSlots.push({
+      start: new Date(selectedSlot.start),
+      end: new Date(selectedSlot.end)
+    });
     // Sort scheduled slots for efficient conflict checking
     scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
     
-    // Next chunk starts after this one ends (with a buffer to allow for breaks)
-    // Use a minimum gap of 1 hour between chunks, or start of next day if needed
-    const minGap = 60 * 60 * 1000; // 1 hour minimum gap
+    // Next chunk starts after this one ends (with a small buffer)
+    // Use a minimum gap of 15 minutes between chunks
+    const minGap = 15 * 60 * 1000; // 15 minutes minimum gap
     currentTime = new Date(selectedSlot.end.getTime() + minGap);
     
     // If we've moved past working hours, move to next day's start
@@ -180,7 +192,7 @@ export async function smartSchedule(
       // Move to next day at working hours start
       currentTime.setDate(currentTime.getDate() + 1);
       currentTime.setHours(startHour, startMin, 0, 0);
-      console.log(`Moved to next day: ${currentTime.toISOString()}`);
+      console.log(`[SMART-SCHEDULE] Moved to next day: ${currentTime.toISOString()}`);
     }
   }
   
