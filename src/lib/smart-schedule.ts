@@ -73,7 +73,6 @@ export async function smartSchedule(
   busySlots: TimeSlot[]
 ): Promise<ScheduleResult> {
   const duration = task.duration || 60; // Default 1 hour
-  const duration = task.duration || 60; // Default 1 hour
   const dueDate = parseDueDate(task.dueDate);
   const now = new Date();
   
