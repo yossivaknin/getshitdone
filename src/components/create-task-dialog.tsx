@@ -150,6 +150,11 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
       return;
     }
     
+    // Calculate total duration if manual chunking is enabled
+    const finalDuration = manualChunking && chunkCount > 1 
+      ? chunkCount * chunkDuration 
+      : durationValue;
+    
     const newTask = {
       id: Date.now().toString(),
       list_id: listId,
@@ -161,7 +166,7 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
       })),
       // Store date as ISO string for consistent parsing
       dueDate: dueDate || undefined,
-      duration: durationValue,
+      duration: finalDuration,
     };
 
     onCreateTask(newTask);
@@ -170,8 +175,88 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
     setTitle('');
     setDescription('');
     setDueDate('');
-    setDuration('');
+    setDuration('30');
     setSelectedTags([]);
+    setManualChunking(false);
+    setChunkCount(1);
+    setChunkDuration(30);
+  };
+
+  const handleCreateAndSchedule = async () => {
+    // Validate duration
+    const taskDuration = duration ? parseInt(duration) : undefined;
+    if (!taskDuration || taskDuration <= 0) {
+      toast.error('Task must have a duration to schedule');
+      return;
+    }
+
+    // Get access token and refresh token from localStorage
+    const accessToken = localStorage.getItem('google_calendar_token');
+    const refreshToken = localStorage.getItem('google_calendar_refresh_token');
+    
+    if (!accessToken) {
+      toast.error('Google Calendar not connected. Please connect in Settings first.');
+      return;
+    }
+
+    setIsScheduling(true);
+    
+    try {
+      // Calculate total duration if manual chunking is enabled
+      const finalDuration = manualChunking && chunkCount > 1 
+        ? chunkCount * chunkDuration 
+        : taskDuration;
+
+      // First create the task
+      const newTask = {
+        id: Date.now().toString(),
+        list_id: listId,
+        title,
+        description,
+        tags: selectedTags.map(name => ({
+          name,
+          color: getTagColor(name)
+        })),
+        dueDate: dueDate || undefined,
+        duration: finalDuration,
+      };
+
+      // Create task first
+      onCreateTask(newTask);
+
+      // Then schedule it (we'll need to get the actual task ID from the server)
+      // For now, we'll use a temporary ID and the server will handle it
+      const result = await scheduleTask({
+        id: newTask.id, // This will be replaced by the actual task ID from the server
+        title,
+        duration: finalDuration,
+        dueDate: dueDate || undefined,
+        list_id: listId,
+        chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
+        chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
+      }, accessToken, refreshToken || undefined);
+      
+      if (result.success) {
+        setOpen(false);
+        toast.success('Task created and scheduled successfully!');
+        // Reset form
+        setTitle('');
+        setDescription('');
+        setDueDate('');
+        setDuration('30');
+        setSelectedTags([]);
+        setManualChunking(false);
+        setChunkCount(1);
+        setChunkDuration(30);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Schedule error:', error);
+      toast.error('Failed to schedule task. Please check your calendar connection.');
+    } finally {
+      setIsScheduling(false);
+    }
   };
 
   const renderedTrigger = React.useMemo(() => {
@@ -335,12 +420,108 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
                   />
                 </div>
               </div>
+
+              {/* Manual Chunking Option */}
+              <div className="space-y-2 sm:space-y-3 p-3 sm:p-4 bg-gray-50 rounded-md border-2 border-slate-300">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="create-manual-chunking" className="text-sm sm:text-base font-bold text-gray-900 cursor-pointer">
+                    Chunk it!
+                  </Label>
+                  <input
+                    id="create-manual-chunking"
+                    type="checkbox"
+                    checked={manualChunking}
+                    onChange={(e) => setManualChunking(e.target.checked)}
+                    className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 border-2 border-slate-300 rounded focus:ring-blue-500"
+                  />
+                </div>
+                {manualChunking && (
+                  <>
+                    <p className="text-xs sm:text-sm text-gray-600 font-medium">
+                      Split task into manageable calendar blocks.
+                    </p>
+                    <div className="space-y-3 sm:space-y-4 pl-0 sm:pl-6">
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label htmlFor="create-chunk-count" className="text-xs sm:text-sm text-gray-600">
+                          Number of chunks
+                        </Label>
+                        <Input
+                          id="create-chunk-count"
+                          type="number"
+                          value={chunkCount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              setChunkCount(1);
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 1) {
+                                setChunkCount(Math.min(10, Math.max(1, num)));
+                              }
+                            }
+                          }}
+                          min="1"
+                          max="10"
+                          className="w-full sm:w-32 h-9 border-2 border-slate-300 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label htmlFor="create-chunk-duration" className="text-xs sm:text-sm text-gray-600">
+                          Duration per chunk (minutes)
+                        </Label>
+                        <Input
+                          id="create-chunk-duration"
+                          type="number"
+                          value={chunkDuration}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              setChunkDuration(30);
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 15) {
+                                setChunkDuration(Math.min(240, Math.max(15, num)));
+                              }
+                            }
+                          }}
+                          min="15"
+                          max="240"
+                          className="w-full sm:w-32 h-9 border-2 border-slate-300 text-sm"
+                        />
+                      </div>
+                      {duration && (
+                        <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
+                          Total: {chunkCount} chunks × {chunkDuration} min = {chunkCount * chunkDuration} minutes
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-2 md:gap-0 pt-3 sm:pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="w-full sm:w-auto order-2 sm:order-1 text-sm">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="w-full sm:w-auto order-3 sm:order-1 text-sm">
                 Cancel
               </Button>
-              <Button type="submit" className="w-full sm:w-auto order-1 sm:order-2 text-sm px-3 sm:px-4">Create Task</Button>
+              <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
+                <Button 
+                  type="submit" 
+                  className="flex-1 sm:flex-initial text-sm px-3 sm:px-4"
+                >
+                  Create Task
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={handleCreateAndSchedule}
+                  disabled={isScheduling || !duration}
+                  className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 sm:px-4"
+                >
+                  <CalendarCheck className="w-4 h-4 mr-1.5 sm:mr-2" />
+                  <span className="hidden md:inline">{isScheduling ? 'Booking...' : 'Book The Time'}</span>
+                  <span className="hidden sm:inline md:hidden">{isScheduling ? 'Booking...' : 'Book Time'}</span>
+                  <span className="sm:hidden">{isScheduling ? 'Booking...' : 'Book'}</span>
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
