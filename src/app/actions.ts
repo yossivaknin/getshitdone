@@ -20,13 +20,10 @@ export async function getTasks() {
     return { error: 'Not authenticated', tasks: [] }
   }
 
-  // Fetch tasks with tags from separate table
+  // Fetch tasks first
   const { data: tasks, error } = await supabase
     .from('tasks')
-    .select(`
-      *,
-      tags(name, color)
-    `)
+    .select('*')
     .eq('user_id', user.id)
     .order('position', { ascending: true })
 
@@ -35,32 +32,54 @@ export async function getTasks() {
     return { error: error.message, tasks: [] }
   }
 
+  // Fetch tags for all tasks separately
+  const taskIds = (tasks || []).map(t => t.id)
+  let tagsMap: Record<string, any[]> = {}
+  
+  if (taskIds.length > 0) {
+    const { data: tags, error: tagsError } = await supabase
+      .from('tags')
+      .select('task_id, name, color')
+      .in('task_id', taskIds)
+
+    if (!tagsError && tags) {
+      // Group tags by task_id
+      tags.forEach((tag: any) => {
+        if (!tagsMap[tag.task_id]) {
+          tagsMap[tag.task_id] = []
+        }
+        tagsMap[tag.task_id].push({
+          name: tag.name,
+          color: tag.color || 'bg-gray-100 text-gray-700'
+        })
+      })
+    }
+  }
+
+  if (error) {
+    console.error('Error fetching tasks:', error)
+    return { error: error.message, tasks: [] }
+  }
+
   // Transform tasks to match the app's expected format
   const transformedTasks = (tasks || []).map(task => {
-    // Handle tags - check if tags is an array column or from separate table
-    let taskTags: any[] = []
+    // Get tags from the tagsMap we built
+    const taskTags = tagsMap[task.id] || []
     
-    // Check if tags is from the joined tags table (array of objects)
+    // Also check if tags is an array column (for backward compatibility)
+    let arrayColumnTags: any[] = []
     if (task.tags && Array.isArray(task.tags)) {
-      // Filter out null values (from join when no tags exist)
       const validTags = task.tags.filter((tag: any) => tag !== null && tag !== undefined)
-      
-      if (validTags.length > 0) {
-        if (typeof validTags[0] === 'object' && validTags[0].name) {
-          // Tags from separate table (joined)
-          taskTags = validTags.map((tag: any) => ({
-            name: tag.name,
-            color: tag.color || 'bg-gray-100 text-gray-700'
-          }))
-        } else if (typeof validTags[0] === 'string') {
-          // Tags is an array column (array of strings)
-          taskTags = validTags.map((tagName: string) => ({
-            name: tagName,
-            color: 'bg-gray-100 text-gray-700' // Default color, will be managed client-side
-          }))
-        }
+      if (validTags.length > 0 && typeof validTags[0] === 'string') {
+        arrayColumnTags = validTags.map((tagName: string) => ({
+          name: tagName,
+          color: 'bg-gray-100 text-gray-700'
+        }))
       }
     }
+    
+    // Use tags from separate table if available, otherwise use array column
+    const finalTags = taskTags.length > 0 ? taskTags : arrayColumnTags
     
     return {
       id: task.id,
