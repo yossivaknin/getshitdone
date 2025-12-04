@@ -21,12 +21,11 @@ export async function getTasks() {
   }
 
   // Fetch tasks with tags from separate table
-  // Use left join to handle cases where tasks have no tags
   const { data: tasks, error } = await supabase
     .from('tasks')
     .select(`
       *,
-      tags:tags!left(name, color)
+      tags(name, color)
     `)
     .eq('user_id', user.id)
     .order('position', { ascending: true })
@@ -42,18 +41,25 @@ export async function getTasks() {
     let taskTags: any[] = []
     
     // Check if tags is from the joined tags table (array of objects)
-    if (task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object') {
-      // Tags from separate table (joined)
-      taskTags = task.tags.map((tag: any) => ({
-        name: tag.name,
-        color: tag.color || 'bg-gray-100 text-gray-700'
-      }))
-    } else if (Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'string') {
-      // Tags is an array column (array of strings)
-      taskTags = task.tags.map((tagName: string) => ({
-        name: tagName,
-        color: 'bg-gray-100 text-gray-700' // Default color, will be managed client-side
-      }))
+    if (task.tags && Array.isArray(task.tags)) {
+      // Filter out null values (from join when no tags exist)
+      const validTags = task.tags.filter((tag: any) => tag !== null && tag !== undefined)
+      
+      if (validTags.length > 0) {
+        if (typeof validTags[0] === 'object' && validTags[0].name) {
+          // Tags from separate table (joined)
+          taskTags = validTags.map((tag: any) => ({
+            name: tag.name,
+            color: tag.color || 'bg-gray-100 text-gray-700'
+          }))
+        } else if (typeof validTags[0] === 'string') {
+          // Tags is an array column (array of strings)
+          taskTags = validTags.map((tagName: string) => ({
+            name: tagName,
+            color: 'bg-gray-100 text-gray-700' // Default color, will be managed client-side
+          }))
+        }
+      }
     }
     
     return {
@@ -237,7 +243,18 @@ export async function updateTask(taskId: string, updates: {
   if (updates.description !== undefined) updateData.description = updates.description
   if (updates.status !== undefined) updateData.status = updates.status
   if (updates.dueDate !== undefined) {
-    updateData.due_date = updates.dueDate ? new Date(updates.dueDate).toISOString() : null
+    // Handle empty string as null (clearing the date)
+    if (updates.dueDate === '' || updates.dueDate === null) {
+      updateData.due_date = null
+    } else {
+      // Parse and set the date
+      const dateValue = new Date(updates.dueDate)
+      if (!isNaN(dateValue.getTime())) {
+        updateData.due_date = dateValue.toISOString()
+      } else {
+        updateData.due_date = null
+      }
+    }
   }
   if (updates.duration !== undefined) updateData.duration_minutes = updates.duration
 
