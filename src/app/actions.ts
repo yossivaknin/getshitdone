@@ -20,9 +20,13 @@ export async function getTasks() {
     return { error: 'Not authenticated', tasks: [] }
   }
 
+  // Fetch tasks with tags from separate table
   const { data: tasks, error } = await supabase
     .from('tasks')
-    .select('*')
+    .select(`
+      *,
+      tags:tags(name, color)
+    `)
     .eq('user_id', user.id)
     .order('position', { ascending: true })
 
@@ -33,22 +37,22 @@ export async function getTasks() {
 
   // Transform tasks to match the app's expected format
   const transformedTasks = (tasks || []).map(task => {
-    // Handle tags - your schema has tags as an array column
-    // Try to get tags from array column first, fallback to separate table
+    // Handle tags - check if tags is an array column or from separate table
     let taskTags: any[] = []
     
-    if (Array.isArray(task.tags)) {
-      // Tags is an array column (your current schema)
+    // Check if tags is from the joined tags table (array of objects)
+    if (task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object') {
+      // Tags from separate table (joined)
+      taskTags = task.tags.map((tag: any) => ({
+        name: tag.name,
+        color: tag.color || 'bg-gray-100 text-gray-700'
+      }))
+    } else if (Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'string') {
+      // Tags is an array column (array of strings)
       taskTags = task.tags.map((tagName: string) => ({
         name: tagName,
         color: 'bg-gray-100 text-gray-700' // Default color, will be managed client-side
       }))
-    } else if (task.tags && typeof task.tags === 'object') {
-      // Tags might be from a join (separate table)
-      taskTags = Array.isArray(task.tags) ? task.tags.map((tag: any) => ({
-        name: tag.name,
-        color: tag.color || 'bg-gray-100 text-gray-700'
-      })) : []
     }
     
     return {
@@ -168,38 +172,31 @@ export async function createTask(taskData: {
     return { error: taskError.message }
   }
 
-  // Handle tags - your schema has tags as an array column
-  // Update the task with tags array if provided
-  if (taskData.tags && taskData.tags.length > 0 && task) {
-    const { error: tagsError } = await supabase
-      .from('tasks')
-      .update({ tags: taskData.tags })
-      .eq('id', task.id)
+  // Handle tags - use separate tags table
+  if (task) {
+    // First, delete existing tags for this task
+    await supabase
+      .from('tags')
+      .delete()
+      .eq('task_id', task.id)
 
-    if (tagsError) {
-      console.error('Error updating tags array:', tagsError)
-      // Fallback: try separate tags table if it exists
+    // Then insert new tags if provided
+    if (taskData.tags && taskData.tags.length > 0) {
       const tagInserts = taskData.tags.map(tagName => ({
         task_id: task.id,
         name: tagName,
         color: null
       }))
 
-      const { error: separateTagsError } = await supabase
+      const { error: tagsError } = await supabase
         .from('tags')
         .insert(tagInserts)
 
-      if (separateTagsError) {
-        console.error('Error creating tags in separate table:', separateTagsError)
+      if (tagsError) {
+        console.error('Error creating tags:', tagsError)
         // Don't fail the whole operation if tags fail
       }
     }
-  } else if (task) {
-    // Ensure tags is an empty array if no tags provided
-    await supabase
-      .from('tasks')
-      .update({ tags: [] })
-      .eq('id', task.id)
   }
 
   revalidatePath('/')
