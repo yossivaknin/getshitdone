@@ -208,6 +208,10 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
         ? chunkCount * chunkDuration 
         : taskDuration;
 
+      // Get working hours from localStorage
+      const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
+      const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+
       const result = await scheduleTask({
         id: task.id,
         title,
@@ -216,7 +220,7 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
         list_id: task.list_id || 'todo',
         chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
         chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
-      }, accessToken, refreshToken || undefined);
+      }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd);
       
       if (result.success) {
         // Validate duration

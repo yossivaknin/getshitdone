@@ -230,6 +230,10 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
         return;
       }
 
+      // Get working hours from localStorage
+      const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
+      const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+
       // Now schedule it with the actual task ID from the database
       const result = await scheduleTask({
         id: createdTask.id, // Use the actual database ID
@@ -239,7 +243,7 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
         list_id: listId,
         chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
         chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
-      }, accessToken, refreshToken || undefined);
+      }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd);
       
       if (result.success) {
         setOpen(false);

@@ -176,13 +176,17 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
         console.log('[CLIENT] Calling scheduleTask server action...');
         
         try {
+            // Get working hours from localStorage
+            const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
+            const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+
             const result = await scheduleTask({
                 id: task.id,
                 title: task.title,
                 duration: task.duration,
                 dueDate: task.dueDate,
                 list_id: task.list_id || 'todo'
-            }, accessToken, refreshToken || undefined);
+            }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd);
             
             console.log('[CLIENT] Schedule result received:', result);
 

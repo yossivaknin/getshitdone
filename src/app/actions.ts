@@ -378,7 +378,9 @@ export async function scheduleTask(
     chunkDuration?: number
   },
   accessToken: string,
-  refreshToken?: string
+  refreshToken?: string,
+  workingHoursStart?: string,
+  workingHoursEnd?: string
 ) {
   try {
     // Import scheduling functions
@@ -424,20 +426,89 @@ export async function scheduleTask(
       dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     }
 
+    // Get working hours from parameters or localStorage (client-side) or defaults
+    const defaultStart = workingHoursStart || '09:00'
+    const defaultEnd = workingHoursEnd || '18:00'
+    
     // Set end date to end of working day
-    dueDate.setHours(18, 0, 0, 0)
+    const [endHour, endMin] = defaultEnd.split(':').map(Number)
+    dueDate.setHours(endHour, endMin, 0, 0)
 
     // Create calendar config
     const config: CalendarConfig = {
       accessToken: validToken,
       refreshToken: refreshToken,
-      workingHoursStart: '09:00',
-      workingHoursEnd: '18:00'
+      workingHoursStart: defaultStart,
+      workingHoursEnd: defaultEnd
     }
 
     // Get busy slots from now until due date
     const now = new Date()
-    const busySlots = await getBusySlots(config, now, dueDate)
+    let busySlots = await getBusySlots(config, now, dueDate)
+    
+    // Also get all existing events created by this app (to avoid overlaps)
+    // Fetch tasks with google_event_ids to get all scheduled events
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (user) {
+      const { data: existingTasks } = await supabase
+        .from('tasks')
+        .select('google_event_ids')
+        .eq('user_id', user.id)
+        .not('google_event_ids', 'is', null)
+      
+      if (existingTasks) {
+        // Fetch event details for all existing scheduled events
+        const allEventIds: string[] = []
+        existingTasks.forEach((task: any) => {
+          if (task.google_event_ids && Array.isArray(task.google_event_ids)) {
+            allEventIds.push(...task.google_event_ids)
+          }
+        })
+        
+        // Fetch event details from Google Calendar to get their time slots
+        if (allEventIds.length > 0) {
+          try {
+            const { TimeSlot } = await import('@/lib/calendar')
+            const eventPromises = allEventIds.map(async (eventId: string) => {
+              try {
+                const eventResponse = await fetch(
+                  `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+                  {
+                    headers: {
+                      'Authorization': `Bearer ${validToken}`,
+                    },
+                  }
+                )
+                
+                if (eventResponse.ok) {
+                  const event = await eventResponse.json()
+                  if (event.start?.dateTime && event.end?.dateTime) {
+                    return {
+                      start: new Date(event.start.dateTime),
+                      end: new Date(event.end.dateTime)
+                    } as TimeSlot
+                  }
+                }
+              } catch (error) {
+                console.error(`Error fetching event ${eventId}:`, error)
+              }
+              return null
+            })
+            
+            const eventSlots = (await Promise.all(eventPromises)).filter(slot => slot !== null) as TimeSlot[]
+            // Add app-created events to busy slots
+            busySlots = [...busySlots, ...eventSlots]
+            // Sort by start time
+            busySlots.sort((a, b) => a.start.getTime() - b.start.getTime())
+            console.log(`[SCHEDULE] Added ${eventSlots.length} app-created events to busy slots`)
+          } catch (error) {
+            console.error('Error fetching existing events:', error)
+          }
+        }
+      }
+    }
 
     // Create task object for smartSchedule
     const task: Task = {

@@ -14,8 +14,18 @@ import { TagManager } from '@/components/tag-manager';
 export default function SettingsPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [workingHoursStart, setWorkingHoursStart] = useState('09:00');
-  const [workingHoursEnd, setWorkingHoursEnd] = useState('18:00');
+  const [workingHoursStart, setWorkingHoursStart] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('working_hours_start') || '09:00';
+    }
+    return '09:00';
+  });
+  const [workingHoursEnd, setWorkingHoursEnd] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('working_hours_end') || '18:00';
+    }
+    return '18:00';
+  });
   const [redirectUri, setRedirectUri] = useState('');
 
   // Check connection status on mount and handle OAuth callback
@@ -287,7 +297,10 @@ export default function SettingsPage() {
                 id="start-time"
                 type="time"
                 value={workingHoursStart}
-                onChange={(e) => setWorkingHoursStart(e.target.value)}
+                onChange={(e) => {
+                  setWorkingHoursStart(e.target.value);
+                  localStorage.setItem('working_hours_start', e.target.value);
+                }}
               />
             </div>
             <div>
@@ -296,7 +309,10 @@ export default function SettingsPage() {
                 id="end-time"
                 type="time"
                 value={workingHoursEnd}
-                onChange={(e) => setWorkingHoursEnd(e.target.value)}
+                onChange={(e) => {
+                  setWorkingHoursEnd(e.target.value);
+                  localStorage.setItem('working_hours_end', e.target.value);
+                }}
               />
             </div>
           </div>
