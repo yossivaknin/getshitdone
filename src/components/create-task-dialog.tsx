@@ -5,7 +5,9 @@ import * as React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tag as TagIcon, Plus, X } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, CalendarCheck } from 'lucide-react';
+import { scheduleTask } from '@/app/actions';
+import toast from 'react-hot-toast';
 import {
   Dialog,
   DialogContent,
@@ -50,6 +52,10 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
   const [newTagName, setNewTagName] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);
   const [managedTags, setManagedTags] = useState<string[]>([]);
+  const [manualChunking, setManualChunking] = useState(false);
+  const [chunkCount, setChunkCount] = useState(1);
+  const [chunkDuration, setChunkDuration] = useState(30); // Duration per chunk in minutes
+  const [isScheduling, setIsScheduling] = useState(false);
   
   // Load managed tags from localStorage
   useEffect(() => {
@@ -88,10 +94,14 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
       setDueDate(today.toISOString().split('T')[0]);
       setTitle('');
       setDescription('');
-      setDuration('');
+      setDuration('30'); // Reset to default 30 minutes
       setSelectedTags([]);
       setNewTagName('');
       setShowNewTagInput(false);
+      setManualChunking(false);
+      setChunkCount(1);
+      setChunkDuration(30);
+      setIsScheduling(false);
     }
   }, [open]);
   
