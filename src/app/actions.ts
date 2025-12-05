@@ -86,10 +86,12 @@ export async function getTasks() {
       list_id: task.status || 'todo', // Map status to list_id for kanban columns
       title: task.title,
       description: task.description,
-      tags: taskTags,
+      tags: finalTags,
       dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : undefined,
       duration: task.duration_minutes,
-      googleEventIds: task.google_event_ids || []
+      googleEventIds: task.google_event_ids || [],
+      chunkCount: task.chunk_count || undefined,
+      chunkDuration: task.chunk_duration || undefined
     }
   })
 
@@ -103,6 +105,8 @@ export async function createTask(taskData: {
   dueDate?: string
   duration?: number
   tags?: string[]
+  chunkCount?: number
+  chunkDuration?: number
 }) {
   const supabase = createClient()
   
@@ -184,7 +188,9 @@ export async function createTask(taskData: {
     user_id: user.id,
     workspace_id: workspace.id, // Required field
     position,
-    google_event_ids: []
+    google_event_ids: [],
+    chunk_count: taskData.chunkCount || null,
+    chunk_duration: taskData.chunkDuration || null
   }
   
   const { data: task, error: taskError } = await supabase
@@ -236,6 +242,8 @@ export async function updateTask(taskId: string, updates: {
   dueDate?: string
   duration?: number
   tags?: string[]
+  chunkCount?: number
+  chunkDuration?: number
 }) {
   const supabase = createClient()
   
@@ -276,6 +284,8 @@ export async function updateTask(taskId: string, updates: {
     }
   }
   if (updates.duration !== undefined) updateData.duration_minutes = updates.duration
+  if (updates.chunkCount !== undefined) updateData.chunk_count = updates.chunkCount
+  if (updates.chunkDuration !== undefined) updateData.chunk_duration = updates.chunkDuration
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
@@ -443,71 +453,125 @@ export async function scheduleTask(
     }
 
     // Get busy slots from now until due date
+    // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings
     const now = new Date()
     let busySlots = await getBusySlots(config, now, dueDate)
     
-    // Also get all existing events created by this app (to avoid overlaps)
-    // Fetch tasks with google_event_ids to get all scheduled events
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    console.log(`[SCHEDULE] ===== BUSY SLOTS FROM FREEBUSY API =====`)
+    console.log(`[SCHEDULE] Initial busy slots from FreeBusy API: ${busySlots.length}`)
+    console.log(`[SCHEDULE] These busy slots include ALL calendar events (external meetings, app-created events, etc.)`)
     
-    if (user) {
-      const { data: existingTasks } = await supabase
-        .from('tasks')
-        .select('google_event_ids')
-        .eq('user_id', user.id)
-        .not('google_event_ids', 'is', null)
+    // CRITICAL: If FreeBusy API returns no busy slots, this is a problem
+    if (busySlots.length === 0) {
+      console.error(`[SCHEDULE] ❌ CRITICAL: FreeBusy API returned ZERO busy slots!`)
+      console.error(`[SCHEDULE] This means:`)
+      console.error(`[SCHEDULE]   1. Either your calendar is completely empty (unlikely if you have meetings)`)
+      console.error(`[SCHEDULE]   2. OR the FreeBusy API is not working correctly`)
+      console.error(`[SCHEDULE]   3. OR there's a permissions/authentication issue`)
+      console.error(`[SCHEDULE] Conflict detection will NOT work without busy slots!`)
+    } else {
+      console.log(`[SCHEDULE] ✅ FreeBusy API returned ${busySlots.length} busy slot(s)`)
+      console.log(`[SCHEDULE] Sample busy slots:`)
+      busySlots.slice(0, 5).forEach((slot, idx) => {
+        console.log(`  [${idx + 1}] ${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}`)
+      })
+    }
+    
+    // Also get all existing "[Focus]" events directly from Google Calendar
+    // This ensures we have the most up-to-date list of app-created events
+    // Note: FreeBusy should already include these, but fetching separately ensures we have them
+    try {
+      const { TimeSlot } = await import('@/lib/calendar')
+      const timeMin = now.toISOString()
+      const timeMax = dueDate.toISOString()
       
-      if (existingTasks) {
-        // Fetch event details for all existing scheduled events
-        const allEventIds: string[] = []
-        existingTasks.forEach((task: any) => {
-          if (task.google_event_ids && Array.isArray(task.google_event_ids)) {
-            allEventIds.push(...task.google_event_ids)
+      // Fetch all events with "[Focus]" in the title from Google Calendar
+      const eventsResponse = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+        `timeMin=${encodeURIComponent(timeMin)}&` +
+        `timeMax=${encodeURIComponent(timeMax)}&` +
+        `maxResults=2500&` +
+        `orderBy=startTime&` +
+        `singleEvents=true&` +
+        `q=[Focus]`,
+        {
+          headers: {
+            'Authorization': `Bearer ${validToken}`,
+          },
+        }
+      )
+      
+      if (eventsResponse.ok) {
+        const eventsData = await eventsResponse.json()
+        const focusEvents = eventsData.items || []
+        
+        console.log(`[SCHEDULE] Found ${focusEvents.length} existing [Focus] events in calendar`)
+        
+        // Convert to TimeSlot format
+        const focusEventSlots: TimeSlot[] = focusEvents
+          .filter((event: any) => event.start?.dateTime && event.end?.dateTime)
+          .map((event: any) => ({
+            start: new Date(event.start.dateTime),
+            end: new Date(event.end.dateTime)
+          }))
+        
+        // Merge with busy slots from FreeBusy API
+        // Use a Set to track unique time ranges (avoid duplicates)
+        const existingSlots = new Set<string>()
+        const mergedSlots: TimeSlot[] = []
+        
+        // Add FreeBusy slots first (these include ALL meetings)
+        busySlots.forEach(slot => {
+          const key = `${slot.start.getTime()}-${slot.end.getTime()}`
+          if (!existingSlots.has(key)) {
+            existingSlots.add(key)
+            mergedSlots.push(slot)
           }
         })
         
-        // Fetch event details from Google Calendar to get their time slots
-        if (allEventIds.length > 0) {
-          try {
-            const { TimeSlot } = await import('@/lib/calendar')
-            const eventPromises = allEventIds.map(async (eventId: string) => {
-              try {
-                const eventResponse = await fetch(
-                  `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-                  {
-                    headers: {
-                      'Authorization': `Bearer ${validToken}`,
-                    },
-                  }
-                )
-                
-                if (eventResponse.ok) {
-                  const event = await eventResponse.json()
-                  if (event.start?.dateTime && event.end?.dateTime) {
-                    return {
-                      start: new Date(event.start.dateTime),
-                      end: new Date(event.end.dateTime)
-                    } as TimeSlot
-                  }
-                }
-              } catch (error) {
-                console.error(`Error fetching event ${eventId}:`, error)
-              }
-              return null
-            })
-            
-            const eventSlots = (await Promise.all(eventPromises)).filter(slot => slot !== null) as TimeSlot[]
-            // Add app-created events to busy slots
-            busySlots = [...busySlots, ...eventSlots]
-            // Sort by start time
-            busySlots.sort((a, b) => a.start.getTime() - b.start.getTime())
-            console.log(`[SCHEDULE] Added ${eventSlots.length} app-created events to busy slots`)
-          } catch (error) {
-            console.error('Error fetching existing events:', error)
+        // Add Focus event slots (avoid duplicates)
+        focusEventSlots.forEach(slot => {
+          const key = `${slot.start.getTime()}-${slot.end.getTime()}`
+          if (!existingSlots.has(key)) {
+            existingSlots.add(key)
+            mergedSlots.push(slot)
           }
+        })
+        
+        // Sort by start time
+        mergedSlots.sort((a, b) => a.start.getTime() - b.start.getTime())
+        busySlots = mergedSlots
+        
+        console.log(`[SCHEDULE] Total busy slots after merging: ${busySlots.length}`)
+        console.log(`[SCHEDULE]   - From FreeBusy API (includes ALL meetings): ${busySlots.length - focusEventSlots.length}`)
+        console.log(`[SCHEDULE]   - From [Focus] events query: ${focusEventSlots.length}`)
+        
+        // Log first few busy slots for debugging
+        if (busySlots.length > 0) {
+          console.log(`[SCHEDULE] Sample busy slots (first 5):`)
+          busySlots.slice(0, 5).forEach((slot, idx) => {
+            console.log(`  [${idx + 1}] ${new Date(slot.start).toISOString()} - ${new Date(slot.end).toISOString()}`)
+          })
         }
+      } else {
+        console.warn(`[SCHEDULE] Failed to fetch [Focus] events: ${eventsResponse.status}`)
+        console.warn(`[SCHEDULE] Continuing with FreeBusy slots only (should still include all meetings)`)
+        // Continue with FreeBusy slots only - these should still include all meetings
       }
+    } catch (error) {
+      console.error('[SCHEDULE] Error fetching [Focus] events:', error)
+      console.warn('[SCHEDULE] Continuing with FreeBusy slots only (should still include all meetings)')
+      // Continue with FreeBusy slots only - these should still include all meetings
+    }
+    
+    // Final validation: ensure we have busy slots
+    if (busySlots.length === 0) {
+      console.warn('[SCHEDULE] ⚠️ WARNING: No busy slots found! This means:')
+      console.warn('[SCHEDULE]   1. Either your calendar is completely free')
+      console.warn('[SCHEDULE]   2. Or the FreeBusy API is not working correctly')
+      console.warn('[SCHEDULE]   3. Conflict detection will NOT work!')
+    } else {
+      console.log(`[SCHEDULE] ✅ Ready to schedule with ${busySlots.length} busy slots to avoid`)
     }
 
     // Create task object for smartSchedule

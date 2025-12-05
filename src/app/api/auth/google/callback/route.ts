@@ -19,7 +19,14 @@ export async function GET(request: NextRequest) {
     // Exchange authorization code for tokens
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${request.nextUrl.origin}/api/auth/google/callback`;
+    
+    // Use NEXT_PUBLIC_APP_URL if set, otherwise use request origin
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const redirectUri = `${baseUrl}/api/auth/google/callback`;
+
+    console.log('[OAuth Callback] Redirect URI:', redirectUri);
+    console.log('[OAuth Callback] Request origin:', request.nextUrl.origin);
+    console.log('[OAuth Callback] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -36,7 +43,9 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenResponse.ok) {
-      throw new Error('Failed to exchange code for tokens');
+      const errorText = await tokenResponse.text();
+      console.error('[OAuth Callback] Token exchange failed:', errorText);
+      throw new Error(`Failed to exchange code for tokens: ${errorText}`);
     }
 
     const tokens = await tokenResponse.json();

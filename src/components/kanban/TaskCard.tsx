@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Calendar, Clock, User, CalendarCheck, GripVertical, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
+import { DeleteTaskDialog } from '@/components/delete-task-dialog'
 import { scheduleTask } from '@/app/actions'
 import toast from 'react-hot-toast'
 
@@ -27,6 +28,8 @@ interface TaskCardProps {
 export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isScheduling, setIsScheduling] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const {
         attributes,
@@ -105,13 +108,6 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
             return;
         }
         
-        // Don't open if clicking on drag handle area (left side)
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const clickX = 'touches' in e ? e.touches[0]?.clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
-        if (clickX < 40) { // Left 40px is drag handle area
-            return;
-        }
-        
         if (onEdit) {
             setIsEditDialogOpen(true);
         }
@@ -122,13 +118,18 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
         
         if (!onDelete) return;
         
-        // Confirm deletion
-        if (!confirm(`Are you sure you want to delete "${task.title}"?`)) {
-            return;
-        }
+        // Open delete confirmation dialog
+        setIsDeleteDialogOpen(true);
+    };
 
+    const handleConfirmDelete = async () => {
+        if (!onDelete) return;
+        
+        setIsDeleting(true);
         // Delete the task (Board will handle calendar event deletion)
-        onDelete(task.id);
+        await onDelete(task.id);
+        setIsDeleteDialogOpen(false);
+        setIsDeleting(false);
     };
 
     const handleUpdate = (updatedTask: any) => {
@@ -213,8 +214,9 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 ref={setNodeRef}
                 style={style}
                 {...attributes}
-                        className={cn(
-                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer group relative w-full",
+                {...listeners}
+                className={cn(
+                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-grab active:cursor-grabbing group relative w-full",
                     getStatusStripeColor(),
                     isDone ? "bg-slate-50 opacity-50 grayscale" : "bg-white",
                     isDragging && "scale-105 opacity-50"
@@ -222,25 +224,34 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 onClick={handleCardClick}
                 onTouchEnd={handleCardClick}
             >
-                {/* Drag handle - only this area is draggable */}
+                {/* Drag handle - visual indicator only, whole card is draggable */}
                 <div 
-                    {...listeners}
-                    className="drag-handle absolute left-0 top-0 bottom-0 w-10 sm:w-12 md:w-14 cursor-grab active:cursor-grabbing flex items-center justify-center z-10 pointer-events-auto"
-                    onClick={(e) => e.stopPropagation()}
+                    className="drag-handle absolute left-0 top-0 bottom-0 w-10 sm:w-12 md:w-14 flex items-center justify-center z-10 pointer-events-none"
                 >
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                     </div>
                 </div>
                 
+                {/* At Risk Indicator - positioned above title to avoid footer overlap */}
+                {isAtRisk && (
+                    <div className="absolute top-2 left-12 sm:left-14 md:left-16 z-20">
+                        <div className="bg-red-500 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm">
+                            AT RISK
+                        </div>
+                    </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="flex justify-end items-start mb-2 sm:mb-3">
                     <div className="flex items-center gap-1">
                         {task.duration && !isDone && (
                             <button
                                 onClick={handleSchedule}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
                                 disabled={isScheduling}
-                                className="schedule-button opacity-0 group-hover:opacity-100 p-1.5 hover:bg-blue-50 rounded-md text-blue-500 hover:text-blue-600 transition-all disabled:opacity-50"
+                                className="schedule-button opacity-0 group-hover:opacity-100 p-1.5 hover:bg-blue-50 rounded-md text-blue-500 hover:text-blue-600 transition-all disabled:opacity-50 pointer-events-auto"
                                 title="Schedule in Google Calendar"
                             >
                                 <CalendarCheck className="w-4 h-4" />
@@ -248,15 +259,6 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                         )}
                     </div>
             </div>
-
-                {/* At Risk Indicator */}
-                {isAtRisk && (
-                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
-                        <div className="bg-red-500 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm">
-                            AT RISK
-                        </div>
-                    </div>
-                )}
 
                 {/* Task Title */}
                 <h3 className={cn(
@@ -340,7 +342,9 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                     {onDelete && (
                         <button
                             onClick={handleDelete}
-                            className="delete-button opacity-0 group-hover:opacity-100 p-1 sm:p-1.5 hover:bg-red-50 rounded-md text-red-500 hover:text-red-600 transition-all"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            className="delete-button opacity-0 group-hover:opacity-100 p-1 sm:p-1.5 hover:bg-red-50 rounded-md text-red-500 hover:text-red-600 transition-all pointer-events-auto"
                             title="Delete task"
                         >
                             <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -356,6 +360,15 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                     onOpenChange={setIsEditDialogOpen}
                     onUpdateTask={handleUpdate}
                     allTags={allTags}
+                />
+            )}
+            {onDelete && (
+                <DeleteTaskDialog
+                    open={isDeleteDialogOpen}
+                    onOpenChange={setIsDeleteDialogOpen}
+                    taskTitle={task.title}
+                    onConfirm={handleConfirmDelete}
+                    isDeleting={isDeleting}
                 />
             )}
         </>

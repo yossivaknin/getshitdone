@@ -31,7 +31,8 @@ export default function SettingsPage() {
   // Check connection status on mount and handle OAuth callback
   useEffect(() => {
     // Set redirect URI on client side only
-    setRedirectUri(`${window.location.origin}/api/auth/google/callback`);
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    setRedirectUri(`${baseUrl}/api/auth/google/callback`);
     
     // Check URL params for OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
@@ -69,7 +70,17 @@ export default function SettingsPage() {
     try {
       // Generate OAuth URL
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
-      const redirectUri = `${window.location.origin}/api/auth/google/callback`;
+      
+      // Use NEXT_PUBLIC_APP_URL if set, otherwise use current origin
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const redirectUri = `${baseUrl}/api/auth/google/callback`;
+      
+      // Log for debugging
+      console.log('[OAuth Debug] Redirect URI:', redirectUri);
+      console.log('[OAuth Debug] Current origin:', window.location.origin);
+      console.log('[OAuth Debug] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
+      console.log('[OAuth Debug] Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
+      
       const scope = 'https://www.googleapis.com/auth/calendar';
       const responseType = 'code';
       
@@ -86,6 +97,10 @@ export default function SettingsPage() {
         setIsLoading(false);
         return;
       }
+
+      // Show the redirect URI to user for debugging
+      console.log('[OAuth Debug] Full auth URL:', authUrl);
+      toast.info(`Connecting... Redirect URI: ${redirectUri}`, { duration: 5000 });
 
       // Redirect to Google OAuth
       window.location.href = authUrl;

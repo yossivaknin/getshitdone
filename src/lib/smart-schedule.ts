@@ -127,6 +127,27 @@ export async function smartSchedule(
   // Find free slots for all chunks
   const allFreeSlots: TimeSlot[] = [];
   let currentTime = now;
+  
+  // CRITICAL: Validate that we have busy slots
+  // If busySlots is empty, it might mean FreeBusy API failed, which would break conflict detection
+  if (busySlots.length === 0) {
+    console.error(`[SMART-SCHEDULE] ❌ CRITICAL ERROR: No busy slots provided!`);
+    console.error(`[SMART-SCHEDULE] This means conflict detection will NOT work!`);
+    console.error(`[SMART-SCHEDULE] Events WILL overlap with existing meetings!`);
+    console.error(`[SMART-SCHEDULE] This is likely because:`);
+    console.error(`[SMART-SCHEDULE]   1. FreeBusy API failed or returned no data`);
+    console.error(`[SMART-SCHEDULE]   2. Calendar permissions issue`);
+    console.error(`[SMART-SCHEDULE]   3. Token is invalid or expired`);
+    console.error(`[SMART-SCHEDULE] ⚠️ PROCEEDING ANYWAY - THIS WILL CAUSE OVERLAPS!`);
+    
+    // Return error instead of proceeding with no conflict detection
+    return {
+      success: false,
+      eventsCreated: 0,
+      message: 'Failed to fetch busy slots from calendar. Cannot schedule without conflict detection. Please check your Google Calendar connection and try again.'
+    };
+  }
+  
   // Track scheduled slots so they don't overlap - make a deep copy to avoid reference issues
   const scheduledSlots: TimeSlot[] = busySlots.map(slot => ({
     start: new Date(slot.start),
@@ -136,17 +157,66 @@ export async function smartSchedule(
   // Sort busy slots by start time for efficient conflict checking
   scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
   
-  console.log(`[SMART-SCHEDULE] Starting with ${scheduledSlots.length} busy slots from calendar`);
+  console.log(`[SMART-SCHEDULE] ✅ Starting with ${scheduledSlots.length} busy slots from calendar`);
+  console.log(`[SMART-SCHEDULE] Working hours: ${config.workingHoursStart} - ${config.workingHoursEnd}`);
+  
+  // Log ALL busy slots for verification (not just first 3)
+  if (scheduledSlots.length > 0) {
+    console.log(`[SMART-SCHEDULE] All busy slots that will be avoided:`);
+    scheduledSlots.forEach((slot, idx) => {
+      const startStr = new Date(slot.start).toLocaleString();
+      const endStr = new Date(slot.end).toLocaleString();
+      console.log(`  [${idx + 1}] ${startStr} - ${endStr} (${new Date(slot.start).toISOString()} - ${new Date(slot.end).toISOString()})`);
+    });
+  } else {
+    console.error(`[SMART-SCHEDULE] ❌ NO BUSY SLOTS - CONFLICT DETECTION WILL FAIL!`);
+  }
+  
+  // Track which days already have chunks scheduled for this task
+  // Format: "YYYY-MM-DD" -> boolean
+  const daysWithChunks = new Set<string>();
+  
+  // Helper function to get date string (YYYY-MM-DD) from a Date
+  const getDateString = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+  
+  // Helper function to check if a slot is on a day that already has a chunk
+  const isSlotOnUsedDay = (slot: TimeSlot): boolean => {
+    const slotDate = getDateString(slot.start);
+    return daysWithChunks.has(slotDate);
+  };
+  
+  // Calculate available days before due date
+  const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
+  const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const dueDateDay = new Date(dueDate);
+  dueDateDay.setHours(0, 0, 0, 0);
+  const daysUntilDue = Math.ceil((dueDateDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  
+  console.log(`[SMART-SCHEDULE] Days until due date: ${daysUntilDue}`);
+  console.log(`[SMART-SCHEDULE] Number of chunks: ${chunks.length}`);
+  console.log(`[SMART-SCHEDULE] Will distribute chunks across different days when possible`);
   
   for (let i = 0; i < chunks.length; i++) {
     const chunkDuration = chunks[i];
-    console.log(`[SMART-SCHEDULE] Finding slot for chunk ${i + 1}/${chunks.length} (${chunkDuration} minutes)`);
-    console.log(`[SMART-SCHEDULE] Current time: ${currentTime.toISOString()}`);
+    console.log(`[SMART-SCHEDULE] ===== Finding slot for chunk ${i + 1}/${chunks.length} (${chunkDuration} minutes) =====`);
+    console.log(`[SMART-SCHEDULE] Current search time: ${currentTime.toISOString()}`);
     console.log(`[SMART-SCHEDULE] Already scheduled ${scheduledSlots.length - busySlots.length} chunk(s) in this task`);
+    console.log(`[SMART-SCHEDULE] Days with chunks so far: ${Array.from(daysWithChunks).join(', ') || 'none'}`);
     console.log(`[SMART-SCHEDULE] Total busy slots: ${scheduledSlots.length}`);
     
+    // Log all busy slots for debugging
+    if (scheduledSlots.length > 0) {
+      console.log(`[SMART-SCHEDULE] Busy slots:`, scheduledSlots.map(s => 
+        `${new Date(s.start).toISOString()} - ${new Date(s.end).toISOString()}`
+      ));
+    }
+    
     // Find free slots, excluding already scheduled chunks
-    const freeSlots = findFreeSlots(
+    let freeSlots = findFreeSlots(
       scheduledSlots, // Use scheduledSlots which includes previously scheduled chunks
       currentTime,
       dueDate,
@@ -157,18 +227,92 @@ export async function smartSchedule(
     
     console.log(`[SMART-SCHEDULE] Found ${freeSlots.length} free slot(s) for chunk ${i + 1}`);
     
+    // If we have multiple chunks and there's time before due date, prefer slots on new days
+    if (chunks.length > 1 && daysUntilDue >= chunks.length) {
+      // Filter to prefer slots on days that don't have chunks yet
+      const slotsOnNewDays = freeSlots.filter(slot => !isSlotOnUsedDay(slot));
+      
+      if (slotsOnNewDays.length > 0) {
+        console.log(`[SMART-SCHEDULE] Preferring slots on new days. Found ${slotsOnNewDays.length} slot(s) on unused days`);
+        freeSlots = slotsOnNewDays;
+      } else {
+        console.log(`[SMART-SCHEDULE] No slots available on new days, will use any available slot`);
+      }
+    }
+    
     if (freeSlots.length === 0) {
+      console.error(`[SMART-SCHEDULE] No free slots found for chunk ${i + 1}`);
       return {
         success: false,
         eventsCreated: 0,
-        message: `Not enough time available before due date. Please adjust date or duration.`
+        message: `Not enough time available before due date (${dueDate.toLocaleDateString()}) for chunk ${i + 1}/${chunks.length}. Please adjust date or duration.`
       };
     }
     
     // Use the first available slot
     const selectedSlot = freeSlots[0];
+    
+    // CRITICAL: Double-check that the selected slot doesn't conflict with ANY busy slot
+    // This is a safety check to ensure findFreeSlots didn't miss anything
+    const slotStart = selectedSlot.start.getTime();
+    const slotEnd = selectedSlot.end.getTime();
+    
+    const conflictsWithBusy = scheduledSlots.some(busy => {
+      const busyStart = busy.start.getTime();
+      const busyEnd = busy.end.getTime();
+      return (slotStart < busyEnd && slotEnd > busyStart);
+    });
+    
+    if (conflictsWithBusy) {
+      console.error(`[SMART-SCHEDULE] ❌ CRITICAL ERROR: Selected slot conflicts with existing busy slot!`);
+      console.error(`[SMART-SCHEDULE] Selected slot: ${selectedSlot.start.toISOString()} - ${selectedSlot.end.toISOString()}`);
+      const conflictingSlot = scheduledSlots.find(busy => {
+        const busyStart = busy.start.getTime();
+        const busyEnd = busy.end.getTime();
+        return (slotStart < busyEnd && slotEnd > busyStart);
+      });
+      if (conflictingSlot) {
+        console.error(`[SMART-SCHEDULE] Conflicting busy slot: ${conflictingSlot.start.toISOString()} - ${conflictingSlot.end.toISOString()}`);
+      }
+      return {
+        success: false,
+        eventsCreated: 0,
+        message: `Selected time slot conflicts with an existing meeting. Please try again or adjust your task duration/due date.`
+      };
+    }
+    
     allFreeSlots.push(selectedSlot);
-    console.log(`[SMART-SCHEDULE] Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
+    
+    // Validate selected slot is within working hours
+    const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
+    const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
+    const slotStartHour = selectedSlot.start.getHours();
+    const slotStartMin = selectedSlot.start.getMinutes();
+    const slotEndHour = selectedSlot.end.getHours();
+    const slotEndMin = selectedSlot.end.getMinutes();
+    
+    console.log(`[SMART-SCHEDULE] ✅ Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
+    console.log(`[SMART-SCHEDULE] Slot time: ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} - ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')}`);
+    console.log(`[SMART-SCHEDULE] Working hours: ${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
+    console.log(`[SMART-SCHEDULE] ✅ Verified: No conflicts with ${scheduledSlots.length} busy slots`);
+    
+    // Validate slot is within working hours
+    if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
+      const error = `Selected slot starts before working hours: ${slotStartHour}:${slotStartMin}`;
+      console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
+      throw new Error(error);
+    }
+    
+    if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
+      const error = `Selected slot ends after working hours: ${slotEndHour}:${slotEndMin}`;
+      console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
+      throw new Error(error);
+    }
+    
+    // Mark this day as having a chunk
+    const selectedDay = getDateString(selectedSlot.start);
+    daysWithChunks.add(selectedDay);
+    console.log(`[SMART-SCHEDULE] Marked day ${selectedDay} as having a chunk`);
     
     // Add this slot to scheduledSlots so next chunk won't use it (deep copy)
     scheduledSlots.push({
@@ -178,27 +322,37 @@ export async function smartSchedule(
     // Sort scheduled slots for efficient conflict checking
     scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
     
-    // Next chunk starts after this one ends (with a small buffer)
-    // Use a minimum gap of 15 minutes between chunks
-    const minGap = 15 * 60 * 1000; // 15 minutes minimum gap
-    currentTime = new Date(selectedSlot.end.getTime() + minGap);
+    console.log(`[SMART-SCHEDULE] Added slot to busy list. Total busy slots now: ${scheduledSlots.length}`);
     
-    // If we've moved past working hours, move to next day's start
-    const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
-    const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
-    
-    if (currentTime.getHours() >= endHour || 
-        (currentTime.getHours() === endHour && currentTime.getMinutes() >= endMin)) {
-      // Move to next day at working hours start
+    // For next chunk, if we have multiple chunks and there's time, move to next day
+    if (chunks.length > 1 && i < chunks.length - 1 && daysUntilDue >= chunks.length) {
+      // Move to next day at working hours start to avoid scheduling on same day
+      currentTime = new Date(selectedSlot.start);
       currentTime.setDate(currentTime.getDate() + 1);
       currentTime.setHours(startHour, startMin, 0, 0);
-      console.log(`[SMART-SCHEDULE] Moved to next day: ${currentTime.toISOString()}`);
+      console.log(`[SMART-SCHEDULE] Moving to next day for next chunk: ${currentTime.toISOString()}`);
+    } else {
+      // Next chunk starts after this one ends (with a small buffer)
+      // Use a minimum gap of 15 minutes between chunks
+      const minGap = 15 * 60 * 1000; // 15 minutes minimum gap
+      currentTime = new Date(selectedSlot.end.getTime() + minGap);
+      
+      // If we've moved past working hours, move to next day's start
+      if (currentTime.getHours() >= endHour || 
+          (currentTime.getHours() === endHour && currentTime.getMinutes() >= endMin)) {
+        // Move to next day at working hours start
+        currentTime.setDate(currentTime.getDate() + 1);
+        currentTime.setHours(startHour, startMin, 0, 0);
+        console.log(`[SMART-SCHEDULE] Moved to next day: ${currentTime.toISOString()}`);
+      }
     }
   }
   
   // Create calendar events
   const eventIds: string[] = [];
   const totalChunks = chunks.length;
+  // Track newly created events to add to busy slots for subsequent chunks
+  const newlyCreatedSlots: TimeSlot[] = [];
   
   for (let i = 0; i < allFreeSlots.length; i++) {
     const slot = allFreeSlots[i];
@@ -209,7 +363,7 @@ export async function smartSchedule(
       ? `[Focus] ${task.title} (Part ${chunkNum}/${totalChunks})`
       : `[Focus] ${task.title}`;
     
-    console.log(`Creating event: ${summary} at ${slot.start.toISOString()}`);
+    console.log(`[SMART-SCHEDULE] Creating event ${i + 1}/${allFreeSlots.length}: ${summary} at ${slot.start.toISOString()}`);
     
     try {
       const eventId = await createCalendarEvent(
@@ -220,9 +374,24 @@ export async function smartSchedule(
       );
       
       eventIds.push(eventId);
-      console.log(`Event created successfully: ${eventId}`);
+      
+      // Immediately add this event to newly created slots so subsequent chunks in this task don't overlap
+      newlyCreatedSlots.push({
+        start: new Date(slot.start),
+        end: new Date(slot.end)
+      });
+      
+      // Also add to scheduledSlots for any remaining chunks
+      scheduledSlots.push({
+        start: new Date(slot.start),
+        end: new Date(slot.end)
+      });
+      scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+      
+      console.log(`[SMART-SCHEDULE] Event created successfully: ${eventId}`);
+      console.log(`[SMART-SCHEDULE] Added to busy slots. Total busy slots now: ${scheduledSlots.length}`);
     } catch (error: any) {
-      console.error(`Failed to create event ${i + 1}:`, error);
+      console.error(`[SMART-SCHEDULE] Failed to create event ${i + 1}:`, error);
       // Continue with other events even if one fails
     }
   }

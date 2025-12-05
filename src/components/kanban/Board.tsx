@@ -152,7 +152,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 status: status,
                 dueDate: updatedTask.dueDate,
                 duration: updatedTask.duration,
-                tags: updatedTask.tags?.map((t: any) => t.name) || []
+                tags: updatedTask.tags?.map((t: any) => t.name) || [],
+                chunkCount: updatedTask.chunkCount,
+                chunkDuration: updatedTask.chunkDuration
             });
 
             if (result.error) {
@@ -176,13 +178,17 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         // Find the task to get its calendar event IDs
         const task = tasks.find((t: any) => t.id === taskId);
         
-        // Delete calendar events if they exist
+        // Optimistically remove the task from UI immediately
+        updateTasks((currentTasks) => currentTasks.filter((t: any) => t.id !== taskId));
+        
+        // Delete calendar events if they exist (fire and forget)
         if (task?.googleEventIds && task.googleEventIds.length > 0) {
             const accessToken = localStorage.getItem('google_calendar_token');
             if (accessToken) {
-                try {
-                    for (const eventId of task.googleEventIds) {
-                        await fetch(
+                // Don't await - do this in background
+                Promise.all(
+                    task.googleEventIds.map(eventId =>
+                        fetch(
                             `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
                             {
                                 method: 'DELETE',
@@ -190,11 +196,13 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                                     'Authorization': `Bearer ${accessToken}`,
                                 },
                             }
-                        );
-                    }
-                } catch (error) {
+                        ).catch(error => {
+                            console.error('Error deleting calendar event:', error);
+                        })
+                    )
+                ).catch(error => {
                     console.error('Error deleting calendar events:', error);
-                }
+                });
             }
         }
 
@@ -202,18 +210,25 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         try {
             const result = await deleteTask(taskId);
             if (result.error) {
+                // Revert optimistic update on error
+                if (onTasksChange && typeof onTasksChange === 'function') {
+                    await onTasksChange();
+                }
                 toast.error('Failed to delete task: ' + result.error);
                 return;
             }
 
             toast.success('Task deleted successfully');
-            // Refresh tasks from database
-            if (onTasksChange) {
-                // onTasksChange is now a refresh function, call it
+            // Refresh tasks from database to ensure consistency
+            if (onTasksChange && typeof onTasksChange === 'function') {
                 await onTasksChange();
             }
         } catch (error: any) {
             console.error('Error deleting task:', error);
+            // Revert optimistic update on error
+            if (onTasksChange && typeof onTasksChange === 'function') {
+                await onTasksChange();
+            }
             toast.error('Failed to delete task');
         }
     };
