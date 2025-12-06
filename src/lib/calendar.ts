@@ -58,20 +58,37 @@ export async function getBusySlots(
       let errorMessage = 'Failed to fetch busy slots';
       let errorDetails: any = {};
       
+      // Check if we got an HTML response (404 page) - this usually means API isn't enabled
+      if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+        console.error('[CALENDAR] ❌ Got HTML 404 response - Calendar API likely not enabled');
+        throw new Error(`Google Calendar API returned 404. The Calendar API may not be enabled in your Google Cloud project. Please enable it at: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com`);
+      }
+      
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
         errorDetails = errorJson.error || {};
       } catch {
-        errorMessage = errorText || errorMessage;
+        // If it's not JSON and not HTML, use the text as-is
+        errorMessage = errorText.substring(0, 200) || errorMessage; // Limit length
       }
       
       console.error('[CALENDAR] ❌ Error fetching busy slots:', {
         status: response.status,
         statusText: response.statusText,
         error: errorMessage,
-        details: errorDetails
+        details: errorDetails,
+        responsePreview: errorText.substring(0, 100)
       });
+      
+      // Provide specific guidance based on status code
+      if (response.status === 404) {
+        throw new Error(`Google Calendar API endpoint not found (404). Please verify that the Calendar API is enabled in your Google Cloud Console: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com`);
+      } else if (response.status === 403) {
+        throw new Error(`Google Calendar API access denied (403). Please check that your OAuth token has the calendar scope and that the Calendar API is enabled.`);
+      } else if (response.status === 401) {
+        throw new Error(`Google Calendar API authentication failed (401). Your access token may have expired. Please reconnect your Google Calendar in Settings.`);
+      }
       
       // Throw error with details so caller can handle it properly
       throw new Error(`Google Calendar API error (${response.status}): ${errorMessage}. ${errorDetails.error_description || ''}`);
