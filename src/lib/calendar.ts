@@ -30,7 +30,7 @@ export async function getBusySlots(
   console.log('[CALENDAR] Fetching busy slots...');
   console.log('[CALENDAR] Time range:', timeMin.toISOString(), 'to', timeMax.toISOString());
   
-  // First, verify token has calendar scope
+  // First, verify token has calendar scope and get project info
   try {
     const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
     if (tokenInfoResponse.ok) {
@@ -38,7 +38,9 @@ export async function getBusySlots(
       console.log('[CALENDAR] Token info:', {
         expires_in: tokenInfo.expires_in,
         scope: tokenInfo.scope,
-        audience: tokenInfo.audience
+        audience: tokenInfo.audience,
+        issued_to: tokenInfo.issued_to,
+        user_id: tokenInfo.user_id
       });
       
       // Check if token has calendar scope
@@ -47,8 +49,18 @@ export async function getBusySlots(
         console.error('[CALENDAR] Token scope:', tokenInfo.scope);
         throw new Error('Token does not have Google Calendar scope. Please reconnect Google Calendar in Settings and grant calendar permissions.');
       }
+      
+      // Log the audience (Client ID) to help diagnose project mismatch
+      if (tokenInfo.audience) {
+        console.log('[CALENDAR] Token audience (Client ID):', tokenInfo.audience);
+        console.log('[CALENDAR] ⚠️ IMPORTANT: Make sure Calendar API is enabled in the SAME project as this Client ID!');
+      }
     } else {
-      console.warn('[CALENDAR] ⚠️ Could not verify token info, proceeding anyway');
+      const errorText = await tokenInfoResponse.text();
+      console.warn('[CALENDAR] ⚠️ Could not verify token info:', {
+        status: tokenInfoResponse.status,
+        error: errorText
+      });
     }
   } catch (error) {
     console.warn('[CALENDAR] ⚠️ Error checking token info:', error);
@@ -113,6 +125,20 @@ export async function getBusySlots(
       if (response.status === 404) {
         // Check if it's an HTML 404 (API not enabled) vs JSON 404 (different issue)
         if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+          // Try to get token info to show the Client ID
+          let clientIdInfo = '';
+          try {
+            const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
+            if (tokenInfoResponse.ok) {
+              const tokenInfo = await tokenInfoResponse.json();
+              if (tokenInfo.audience) {
+                clientIdInfo = `\n\nYour OAuth Client ID: ${tokenInfo.audience}\nMake sure Calendar API is enabled in the SAME project as this Client ID!`;
+              }
+            }
+          } catch (e) {
+            // Ignore errors getting token info
+          }
+          
           throw new Error(`Google Calendar API returned 404 HTML page. This usually means:
 1. The Calendar API is NOT enabled in your Google Cloud project
 2. OR you enabled it in a DIFFERENT project than your OAuth credentials
@@ -121,7 +147,7 @@ export async function getBusySlots(
 Please verify:
 - Calendar API is enabled in the SAME project as your OAuth Client ID
 - Go to: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
-- Make sure you're in the correct project (check your OAuth Client ID project)`);
+- Check which project your OAuth Client ID is in: https://console.cloud.google.com/apis/credentials${clientIdInfo}`);
         } else {
           throw new Error(`Google Calendar API endpoint not found (404). This might mean the API is enabled in a different project than your OAuth credentials. Please verify both are in the same Google Cloud project.`);
         }
