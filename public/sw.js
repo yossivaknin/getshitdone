@@ -3,13 +3,11 @@ const CACHE_NAME = 'sitrep-v1';
 const STATIC_CACHE = 'sitrep-static-v1';
 const DYNAMIC_CACHE = 'sitrep-dynamic-v1';
 
-// Assets to cache on install
+// Assets to cache on install (only actual static files, not dynamic routes)
 const STATIC_ASSETS = [
-  '/',
-  '/settings',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  // Note: Not caching '/' or '/settings' as they are dynamic Next.js routes
+  // Icons are cached on-demand when fetched
 ];
 
 // Install event - cache static assets
@@ -18,7 +16,23 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       console.log('[SW] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
+      // Use addAll with error handling - if one fails, others still cache
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url => 
+          cache.add(url).catch(err => {
+            console.warn(`[SW] Failed to cache ${url}:`, err);
+            // Don't throw - allow other assets to cache
+            return null;
+          })
+        )
+      ).then(results => {
+        const failed = results.filter(r => r.status === 'rejected').length;
+        if (failed > 0) {
+          console.warn(`[SW] ${failed} asset(s) failed to cache, but continuing...`);
+        } else {
+          console.log('[SW] ✅ All static assets cached successfully');
+        }
+      });
     })
   );
   self.skipWaiting();
