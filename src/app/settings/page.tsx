@@ -235,7 +235,7 @@ export default function SettingsPage() {
             });
           });
         } else {
-          toast.warning('No events found with "[Focus]" in the next 30 days');
+          toast('No events found with "[Focus]" in the next 30 days', { icon: 'ℹ️' });
           console.log('[DEBUG] No events found. This could mean:');
           console.log('[DEBUG] 1. Events were not created successfully');
           console.log('[DEBUG] 2. Events are outside the 30-day window');
