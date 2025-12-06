@@ -56,22 +56,25 @@ export async function getBusySlots(
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = 'Failed to fetch busy slots';
+      let errorDetails: any = {};
       
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
+        errorDetails = errorJson.error || {};
       } catch {
         errorMessage = errorText || errorMessage;
       }
       
-      console.error('Error fetching busy slots:', {
+      console.error('[CALENDAR] ❌ Error fetching busy slots:', {
         status: response.status,
         statusText: response.statusText,
-        error: errorMessage
+        error: errorMessage,
+        details: errorDetails
       });
       
-      // Don't throw - return empty array so scheduling can still attempt
-      return [];
+      // Throw error with details so caller can handle it properly
+      throw new Error(`Google Calendar API error (${response.status}): ${errorMessage}. ${errorDetails.error_description || ''}`);
     }
 
     const data = await response.json();
@@ -80,24 +83,35 @@ export async function getBusySlots(
     const busySlots: TimeSlot[] = [];
 
     if (data.calendars?.primary?.busy) {
-      console.log('[CALENDAR] Found', data.calendars.primary.busy.length, 'busy periods');
+      console.log('[CALENDAR] ✅ Found', data.calendars.primary.busy.length, 'busy periods from Google Calendar FreeBusy API');
       for (const busy of data.calendars.primary.busy) {
+        const startDate = new Date(busy.start);
+        const endDate = new Date(busy.end);
         busySlots.push({
-          start: new Date(busy.start),
-          end: new Date(busy.end),
+          start: startDate,
+          end: endDate,
         });
-        console.log('[CALENDAR] Busy slot:', busy.start, 'to', busy.end);
+        console.log(`[CALENDAR]   Busy: ${startDate.toISOString()} to ${endDate.toISOString()} (${startDate.toLocaleString()} - ${endDate.toLocaleString()})`);
       }
     } else {
-      console.log('[CALENDAR] No busy periods found in response');
+      console.warn('[CALENDAR] ⚠️ No busy periods found in FreeBusy API response. This might mean:');
+      console.warn('[CALENDAR]   1. Calendar is completely free (unlikely if you have meetings)');
+      console.warn('[CALENDAR]   2. FreeBusy API is not returning data correctly');
+      console.warn('[CALENDAR]   3. Calendar permissions issue');
     }
 
-    console.log(`[CALENDAR] Total busy slots: ${busySlots.length}`);
+    console.log(`[CALENDAR] Total busy slots from FreeBusy API: ${busySlots.length}`);
+    if (busySlots.length === 0) {
+      console.warn('[CALENDAR] ⚠️ WARNING: No busy slots found! Conflict detection will not work for external meetings!');
+    }
     return busySlots;
-  } catch (error) {
-    console.error('Error in getBusySlots:', error);
-    // Return empty array on error so scheduling can still attempt
-    return [];
+  } catch (error: any) {
+    console.error('[CALENDAR] ❌ Exception in getBusySlots:', error);
+    // Re-throw with context so caller knows what went wrong
+    if (error.message) {
+      throw error; // Re-throw if it's already a proper Error
+    }
+    throw new Error(`Failed to fetch busy slots from Google Calendar: ${error.message || String(error)}`);
   }
 }
 
@@ -142,34 +156,71 @@ export function findFreeSlots(
   endDate.setHours(endHour, endMin, 0, 0);
   
   console.log('[FREESLOTS] Searching from:', currentDate.toISOString(), 'to', endDate.toISOString());
+  console.log('[FREESLOTS] Working hours:', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
+  console.log('[FREESLOTS] Total busy slots received:', busySlots.length);
   
   // Sort busy slots by start time
   const sortedBusy = [...busySlots].sort((a, b) => a.start.getTime() - b.start.getTime());
+  
+  // Log all busy slots for debugging
+  if (sortedBusy.length > 0) {
+    console.log('[FREESLOTS] Busy slots to avoid:');
+    sortedBusy.forEach((busy, idx) => {
+      console.log(`  [${idx + 1}] ${new Date(busy.start).toISOString()} - ${new Date(busy.end).toISOString()}`);
+    });
+  } else {
+    console.log('[FREESLOTS] WARNING: No busy slots provided! This means conflict detection may not work.');
+  }
   
   // Search for free slots over the next 7 days
   const maxDays = 7;
   let daysChecked = 0;
   
   while (currentDate < endDate && daysChecked < maxDays) {
-    // Calculate slot end first
+    // Ensure we're starting at the beginning of working hours for this day
+    const dayStart = new Date(currentDate);
+    dayStart.setHours(startHour, startMin, 0, 0);
+    const dayEnd = new Date(currentDate);
+    dayEnd.setHours(endHour, endMin, 0, 0);
+    
+    // If current time is before working hours start, move to start
+    if (currentDate < dayStart) {
+      currentDate = new Date(dayStart);
+    }
+    
+    // If current time is after working hours end, move to next day
+    if (currentDate >= dayEnd) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(startHour, startMin, 0, 0);
+      daysChecked++;
+      continue;
+    }
+    
+    // Calculate slot end
     const slotEnd = new Date(currentDate.getTime() + durationMinutes * 60 * 1000);
     
-    // Check if slot start is within working hours
+    // STRICT CHECK: Slot must be completely within working hours
     const slotStartHour = currentDate.getHours();
     const slotStartMin = currentDate.getMinutes();
     const slotEndHour = slotEnd.getHours();
     const slotEndMin = slotEnd.getMinutes();
     
-    // Check if slot starts before working hours
+    // Check if slot starts before working hours (shouldn't happen after above check, but be safe)
     if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
-      // Move to start of working hours today
-      currentDate.setHours(startHour, startMin, 0, 0);
+      currentDate = new Date(dayStart);
       continue;
     }
     
-    // Check if slot ends after working hours
+    // Check if slot ends after working hours - if so, move to next day
     if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
-      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(startHour, startMin, 0, 0);
+      daysChecked++;
+      continue;
+    }
+    
+    // Final validation: ensure slot is within the day's working hours
+    if (slotEnd > dayEnd) {
       currentDate.setDate(currentDate.getDate() + 1);
       currentDate.setHours(startHour, startMin, 0, 0);
       daysChecked++;
@@ -177,28 +228,89 @@ export function findFreeSlots(
     }
     
     // Check if slot conflicts with busy slots - improved conflict detection
+    const slotStart = currentDate.getTime();
+    const slotEndTime = slotEnd.getTime();
+    
     const hasConflict = sortedBusy.some(busy => {
-      const slotStart = currentDate.getTime();
-      const slotEndTime = slotEnd.getTime();
       const busyStart = busy.start.getTime();
       const busyEnd = busy.end.getTime();
       
       // Check for any overlap: slots overlap if one starts before the other ends
-      return (
-        (slotStart < busyEnd && slotEndTime > busyStart)
-      );
+      // This catches all overlap scenarios:
+      // - New slot starts during busy slot (slotStart >= busyStart && slotStart < busyEnd)
+      // - New slot ends during busy slot (slotEndTime > busyStart && slotEndTime <= busyEnd)
+      // - New slot completely contains busy slot (slotStart <= busyStart && slotEndTime >= busyEnd)
+      // - Busy slot completely contains new slot (busyStart <= slotStart && busyEnd >= slotEndTime)
+      const overlaps = (slotStart < busyEnd && slotEndTime > busyStart);
+      
+      if (overlaps) {
+        console.log(`[FREESLOTS] ⚠️ CONFLICT DETECTED:`, {
+          proposedSlot: `${new Date(slotStart).toISOString()} - ${new Date(slotEndTime).toISOString()}`,
+          busySlot: `${new Date(busyStart).toISOString()} - ${new Date(busyEnd).toISOString()}`,
+          overlapType: slotStart >= busyStart && slotEndTime <= busyEnd ? 'completely inside busy slot' :
+                      slotStart <= busyStart && slotEndTime >= busyEnd ? 'completely contains busy slot' :
+                      slotStart < busyEnd && slotStart >= busyStart ? 'starts during busy slot' :
+                      slotEndTime > busyStart && slotEndTime <= busyEnd ? 'ends during busy slot' : 'overlaps'
+        });
+      }
+      
+      return overlaps;
     });
     
-    if (!hasConflict && slotEnd <= endDate) {
-      freeSlots.push({
-        start: new Date(currentDate),
-        end: slotEnd
-      });
+    // Final validation before adding slot
+    if (hasConflict) {
+      console.log(`[FREESLOTS] ⚠️ Slot skipped due to conflict with busy slot`);
+      // Move to next potential slot
+      currentDate = new Date(currentDate.getTime() + 15 * 60 * 1000);
+      continue;
+    }
+    
+    if (slotEnd <= endDate) {
+      // Double-check that the slot is within working hours
+      const finalStartHour = currentDate.getHours();
+      const finalStartMin = currentDate.getMinutes();
+      const finalEndHour = slotEnd.getHours();
+      const finalEndMin = slotEnd.getMinutes();
       
-      // If we found enough slots, we can return early
-      // For now, let's find at least one good slot
-      if (freeSlots.length >= 1) {
-        break;
+      const isValidStart = finalStartHour > startHour || 
+        (finalStartHour === startHour && finalStartMin >= startMin);
+      const isValidEnd = finalEndHour < endHour || 
+        (finalEndHour === endHour && finalEndMin <= endMin);
+      
+      if (isValidStart && isValidEnd) {
+        // TRIPLE-CHECK: Verify no conflicts one more time before adding
+        const finalCheckConflict = sortedBusy.some(busy => {
+          const busyStart = busy.start.getTime();
+          const busyEnd = busy.end.getTime();
+          return (slotStart < busyEnd && slotEndTime > busyStart);
+        });
+        
+        if (finalCheckConflict) {
+          console.warn(`[FREESLOTS] ⚠️ Slot failed final conflict check - skipping`);
+          currentDate = new Date(currentDate.getTime() + 15 * 60 * 1000);
+          continue;
+        }
+        
+        freeSlots.push({
+          start: new Date(currentDate),
+          end: new Date(slotEnd)
+        });
+        
+        console.log(`[FREESLOTS] ✅ Found valid slot: ${new Date(currentDate).toISOString()} to ${slotEnd.toISOString()}`);
+        console.log(`[FREESLOTS] Slot time: ${finalStartHour}:${finalStartMin.toString().padStart(2, '0')} - ${finalEndHour}:${finalEndMin.toString().padStart(2, '0')}`);
+        console.log(`[FREESLOTS] ✅ Verified: No conflicts with ${sortedBusy.length} busy slots`);
+        
+        // If we found enough slots, we can return early
+        // For now, let's find at least one good slot
+        if (freeSlots.length >= 1) {
+          break;
+        }
+      } else {
+        console.warn(`[FREESLOTS] ❌ Slot rejected - outside working hours:`, {
+          start: `${finalStartHour}:${finalStartMin}`,
+          end: `${finalEndHour}:${finalEndMin}`,
+          workingHours: `${startHour}:${startMin} - ${endHour}:${endMin}`
+        });
       }
     }
     
@@ -225,10 +337,34 @@ export async function createCalendarEvent(
   start: Date,
   end: Date
 ): Promise<string> {
+  // Validate that event is within working hours
+  const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
+  const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
+  
+  const eventStartHour = start.getHours();
+  const eventStartMin = start.getMinutes();
+  const eventEndHour = end.getHours();
+  const eventEndMin = end.getMinutes();
+  
+  // Check if event starts before working hours
+  if (eventStartHour < startHour || (eventStartHour === startHour && eventStartMin < startMin)) {
+    const error = `Event starts before working hours: ${eventStartHour}:${eventStartMin} (working hours: ${startHour}:${startMin})`;
+    console.error('[EVENT]', error);
+    throw new Error(error);
+  }
+  
+  // Check if event ends after working hours
+  if (eventEndHour > endHour || (eventEndHour === endHour && eventEndMin > endMin)) {
+    const error = `Event ends after working hours: ${eventEndHour}:${eventEndMin} (working hours: ${endHour}:${endMin})`;
+    console.error('[EVENT]', error);
+    throw new Error(error);
+  }
+  
   console.log('[EVENT] Creating calendar event...');
   console.log('[EVENT] Summary:', summary);
-  console.log('[EVENT] Start:', start.toISOString());
-  console.log('[EVENT] End:', end.toISOString());
+  console.log('[EVENT] Start:', start.toISOString(), `(${eventStartHour}:${eventStartMin})`);
+  console.log('[EVENT] End:', end.toISOString(), `(${eventEndHour}:${eventEndMin})`);
+  console.log('[EVENT] Working hours:', `${startHour}:${startMin} - ${endHour}:${endMin}`);
   
   try {
     // Get user's timezone from the system or use UTC as fallback

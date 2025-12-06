@@ -188,9 +188,16 @@ export async function createTask(taskData: {
     user_id: user.id,
     workspace_id: workspace.id, // Required field
     position,
-    google_event_ids: [],
-    chunk_count: taskData.chunkCount || null,
-    chunk_duration: taskData.chunkDuration || null
+    google_event_ids: []
+  }
+  
+  // Only include chunking columns if they're provided (and columns exist in schema)
+  // This prevents errors if columns haven't been added yet or schema cache hasn't refreshed
+  if (taskData.chunkCount !== undefined && taskData.chunkCount !== null) {
+    insertData.chunk_count = taskData.chunkCount
+  }
+  if (taskData.chunkDuration !== undefined && taskData.chunkDuration !== null) {
+    insertData.chunk_duration = taskData.chunkDuration
   }
   
   const { data: task, error: taskError } = await supabase
@@ -284,8 +291,13 @@ export async function updateTask(taskId: string, updates: {
     }
   }
   if (updates.duration !== undefined) updateData.duration_minutes = updates.duration
-  if (updates.chunkCount !== undefined) updateData.chunk_count = updates.chunkCount
-  if (updates.chunkDuration !== undefined) updateData.chunk_duration = updates.chunkDuration
+  // Only include chunking columns if they're provided (and columns exist in schema)
+  if (updates.chunkCount !== undefined && updates.chunkCount !== null) {
+    updateData.chunk_count = updates.chunkCount
+  }
+  if (updates.chunkDuration !== undefined && updates.chunkDuration !== null) {
+    updateData.chunk_duration = updates.chunkDuration
+  }
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
@@ -395,7 +407,7 @@ export async function scheduleTask(
   try {
     // Import scheduling functions
     const { smartSchedule, Task } = await import('@/lib/smart-schedule')
-    const { getBusySlots, CalendarConfig } = await import('@/lib/calendar')
+    const { getBusySlots, CalendarConfig, TimeSlot } = await import('@/lib/calendar')
     const { refreshAccessToken } = await import('@/lib/token-refresh')
 
     // Validate access token
@@ -403,22 +415,37 @@ export async function scheduleTask(
 
     // Check if token is valid, refresh if needed
     if (refreshToken) {
-      const tokenTest = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`)
-      if (!tokenTest.ok) {
-        console.log('[SCHEDULE] Token expired, refreshing...')
-        const newToken = await refreshAccessToken(refreshToken)
-        if (newToken) {
-          validToken = newToken
-          // Update localStorage on client side would be ideal, but we can't do that from server
-          // The client should handle token refresh
-        } else {
-          return {
-            success: false,
-            message: 'Token expired and refresh failed. Please reconnect your Google Calendar in Settings.',
-            eventsCreated: 0
+      try {
+        const tokenTest = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`)
+        if (!tokenTest.ok) {
+          const errorText = await tokenTest.text()
+          console.log('[SCHEDULE] Token validation failed, attempting refresh...', {
+            status: tokenTest.status,
+            error: errorText
+          })
+          
+          const newToken = await refreshAccessToken(refreshToken)
+          if (newToken) {
+            validToken = newToken
+            console.log('[SCHEDULE] ✅ Token refreshed successfully')
+            // Update localStorage on client side would be ideal, but we can't do that from server
+            // The client should handle token refresh
+          } else {
+            return {
+              success: false,
+              message: 'Token expired and refresh failed. Please reconnect your Google Calendar in Settings.',
+              eventsCreated: 0
+            }
           }
+        } else {
+          console.log('[SCHEDULE] ✅ Token is valid')
         }
+      } catch (error: any) {
+        console.error('[SCHEDULE] Error validating token:', error)
+        // Try to proceed anyway - the API call will fail with a better error message
       }
+    } else {
+      console.warn('[SCHEDULE] ⚠️ No refresh token available - cannot refresh if token expires')
     }
 
     // Parse due date
@@ -455,26 +482,54 @@ export async function scheduleTask(
     // Get busy slots from now until due date
     // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings
     const now = new Date()
-    let busySlots = await getBusySlots(config, now, dueDate)
+    let busySlots: TimeSlot[] = []
     
-    console.log(`[SCHEDULE] ===== BUSY SLOTS FROM FREEBUSY API =====`)
-    console.log(`[SCHEDULE] Initial busy slots from FreeBusy API: ${busySlots.length}`)
-    console.log(`[SCHEDULE] These busy slots include ALL calendar events (external meetings, app-created events, etc.)`)
-    
-    // CRITICAL: If FreeBusy API returns no busy slots, this is a problem
-    if (busySlots.length === 0) {
-      console.error(`[SCHEDULE] ❌ CRITICAL: FreeBusy API returned ZERO busy slots!`)
-      console.error(`[SCHEDULE] This means:`)
-      console.error(`[SCHEDULE]   1. Either your calendar is completely empty (unlikely if you have meetings)`)
-      console.error(`[SCHEDULE]   2. OR the FreeBusy API is not working correctly`)
-      console.error(`[SCHEDULE]   3. OR there's a permissions/authentication issue`)
-      console.error(`[SCHEDULE] Conflict detection will NOT work without busy slots!`)
-    } else {
-      console.log(`[SCHEDULE] ✅ FreeBusy API returned ${busySlots.length} busy slot(s)`)
-      console.log(`[SCHEDULE] Sample busy slots:`)
-      busySlots.slice(0, 5).forEach((slot, idx) => {
-        console.log(`  [${idx + 1}] ${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}`)
-      })
+    try {
+      busySlots = await getBusySlots(config, now, dueDate)
+      
+      console.log(`[SCHEDULE] ===== BUSY SLOTS FROM FREEBUSY API =====`)
+      console.log(`[SCHEDULE] Initial busy slots from FreeBusy API: ${busySlots.length}`)
+      console.log(`[SCHEDULE] These busy slots include ALL calendar events (external meetings, app-created events, etc.)`)
+      
+      if (busySlots.length === 0) {
+        console.warn(`[SCHEDULE] ⚠️ FreeBusy API returned ZERO busy slots. This might mean:`)
+        console.warn(`[SCHEDULE]   1. Calendar is completely free (unlikely if you have meetings)`)
+        console.warn(`[SCHEDULE]   2. No events in the requested time range`)
+        console.warn(`[SCHEDULE] Proceeding with scheduling (will still check for conflicts with app-created events)`)
+      } else {
+        console.log(`[SCHEDULE] ✅ FreeBusy API returned ${busySlots.length} busy slot(s)`)
+        console.log(`[SCHEDULE] Sample busy slots:`)
+        busySlots.slice(0, 5).forEach((slot, idx) => {
+          console.log(`  [${idx + 1}] ${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}`)
+        })
+      }
+    } catch (error: any) {
+      console.error(`[SCHEDULE] ❌ Failed to fetch busy slots from Google Calendar:`, error)
+      
+      // Check if it's an authentication error
+      if (error.message?.includes('401') || error.message?.includes('unauthorized') || error.message?.includes('invalid_token')) {
+        return {
+          success: false,
+          eventsCreated: 0,
+          message: 'Google Calendar authentication failed. Your access token may have expired. Please reconnect your Google Calendar in Settings.'
+        }
+      }
+      
+      // Check if it's a permissions error
+      if (error.message?.includes('403') || error.message?.includes('permission') || error.message?.includes('forbidden')) {
+        return {
+          success: false,
+          eventsCreated: 0,
+          message: 'Google Calendar permissions denied. Please check your Google Calendar permissions and reconnect in Settings.'
+        }
+      }
+      
+      // Generic error
+      return {
+        success: false,
+        eventsCreated: 0,
+        message: `Failed to fetch busy slots from calendar: ${error.message || 'Unknown error'}. Please check your Google Calendar connection and try again.`
+      }
     }
     
     // Also get all existing "[Focus]" events directly from Google Calendar

@@ -41,14 +41,34 @@ export default function SettingsPage() {
     const refresh = urlParams.get('refresh');
     
     if (connected === 'true' && token) {
+      console.log('[Settings] OAuth callback received:', {
+        hasToken: !!token,
+        hasRefresh: !!refresh,
+        tokenLength: token.length
+      });
+      
       localStorage.setItem('google_calendar_token', token);
       if (refresh) {
         localStorage.setItem('google_calendar_refresh_token', refresh);
       }
-      setIsConnected(true);
-      toast.success('Successfully connected to Google Calendar!');
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('google_calendar_token');
+      if (savedToken === token) {
+        console.log('[Settings] ✅ Token saved successfully');
+        setIsConnected(true);
+        toast.success('Successfully connected to Google Calendar!');
+      } else {
+        console.error('[Settings] ❌ Token save failed!');
+        toast.error('Failed to save token. Please try again.');
+      }
+      
       // Clean URL
       window.history.replaceState({}, '', '/settings');
+    } else if (urlParams.get('error')) {
+      const error = urlParams.get('error');
+      console.error('[Settings] OAuth error:', error);
+      toast.error(`Connection failed: ${error}. Please try again.`);
     }
     
     checkConnectionStatus();
@@ -58,9 +78,53 @@ export default function SettingsPage() {
     try {
       // Check if we have stored tokens
       const token = localStorage.getItem('google_calendar_token');
-      setIsConnected(!!token);
+      const refreshToken = localStorage.getItem('google_calendar_refresh_token');
+      
+      if (!token) {
+        setIsConnected(false);
+        return;
+      }
+      
+      // Validate token by making a test API call
+      try {
+        const response = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${token}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Settings] Token is valid:', {
+            expires_in: data.expires_in,
+            scope: data.scope
+          });
+          setIsConnected(true);
+        } else {
+          // Token is invalid, try to refresh if we have refresh token
+          if (refreshToken) {
+            console.log('[Settings] Token invalid, attempting refresh...');
+            const { refreshAccessToken } = await import('@/lib/token-refresh');
+            const newToken = await refreshAccessToken(refreshToken);
+            
+            if (newToken) {
+              localStorage.setItem('google_calendar_token', newToken);
+              setIsConnected(true);
+              console.log('[Settings] ✅ Token refreshed successfully');
+            } else {
+              console.error('[Settings] ❌ Token refresh failed');
+              setIsConnected(false);
+            }
+          } else {
+            console.error('[Settings] ❌ Token invalid and no refresh token available');
+            setIsConnected(false);
+          }
+        }
+      } catch (error) {
+        console.error('[Settings] Error validating token:', error);
+        // If validation fails, still show as connected if token exists
+        // (might be a network issue)
+        setIsConnected(!!token);
+      }
     } catch (error) {
       console.error('Error checking connection:', error);
+      setIsConnected(false);
     }
   };
 
@@ -100,7 +164,7 @@ export default function SettingsPage() {
 
       // Show the redirect URI to user for debugging
       console.log('[OAuth Debug] Full auth URL:', authUrl);
-      toast.info(`Connecting... Redirect URI: ${redirectUri}`, { duration: 5000 });
+      toast(`Connecting... Redirect URI: ${redirectUri}`, { duration: 5000 });
 
       // Redirect to Google OAuth
       window.location.href = authUrl;
@@ -288,12 +352,35 @@ export default function SettingsPage() {
               <p className="text-sm text-gray-500 mb-2">
                 <strong>Setup Instructions:</strong>
               </p>
-              <ol className="text-sm text-gray-500 list-decimal list-inside space-y-1">
+              <ol className="text-sm text-gray-500 list-decimal list-inside space-y-1 mb-4">
                 <li>Create a Google Cloud Project and enable Calendar API</li>
                 <li>Create OAuth 2.0 credentials</li>
                 <li>Add <code className="bg-gray-100 px-1 rounded">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to your .env file</li>
                 <li>Set authorized redirect URI to: <code className="bg-gray-100 px-1 rounded">{redirectUri || '/api/auth/google/callback'}</code></li>
               </ol>
+              
+              {/* Debug Info */}
+              <div className="mt-4 p-3 bg-gray-50 rounded text-xs">
+                <p className="font-semibold mb-2">Debug Info:</p>
+                <p>Token in localStorage: {typeof window !== 'undefined' && localStorage.getItem('google_calendar_token') ? '✅ Found' : '❌ Not found'}</p>
+                <p>Refresh token: {typeof window !== 'undefined' && localStorage.getItem('google_calendar_refresh_token') ? '✅ Found' : '❌ Not found'}</p>
+                <p>Redirect URI: {redirectUri || 'Not set'}</p>
+                <p>Client ID: {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Not set'}</p>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      console.log('[Settings Debug] Token:', localStorage.getItem('google_calendar_token'));
+                      console.log('[Settings Debug] Refresh Token:', localStorage.getItem('google_calendar_refresh_token'));
+                      console.log('[Settings Debug] Redirect URI:', redirectUri);
+                      console.log('[Settings Debug] Client ID:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+                      toast.success('Debug info logged to console (F12)');
+                    }
+                  }}
+                  className="mt-2 text-blue-600 hover:underline"
+                >
+                  Log debug info to console
+                </button>
+              </div>
             </div>
           )}
         </div>

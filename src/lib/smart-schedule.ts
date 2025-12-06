@@ -128,24 +128,11 @@ export async function smartSchedule(
   const allFreeSlots: TimeSlot[] = [];
   let currentTime = now;
   
-  // CRITICAL: Validate that we have busy slots
-  // If busySlots is empty, it might mean FreeBusy API failed, which would break conflict detection
+  // Note: Empty busySlots is OK - it just means the calendar is free
+  // The error handling is done in scheduleTask before calling smartSchedule
   if (busySlots.length === 0) {
-    console.error(`[SMART-SCHEDULE] ❌ CRITICAL ERROR: No busy slots provided!`);
-    console.error(`[SMART-SCHEDULE] This means conflict detection will NOT work!`);
-    console.error(`[SMART-SCHEDULE] Events WILL overlap with existing meetings!`);
-    console.error(`[SMART-SCHEDULE] This is likely because:`);
-    console.error(`[SMART-SCHEDULE]   1. FreeBusy API failed or returned no data`);
-    console.error(`[SMART-SCHEDULE]   2. Calendar permissions issue`);
-    console.error(`[SMART-SCHEDULE]   3. Token is invalid or expired`);
-    console.error(`[SMART-SCHEDULE] ⚠️ PROCEEDING ANYWAY - THIS WILL CAUSE OVERLAPS!`);
-    
-    // Return error instead of proceeding with no conflict detection
-    return {
-      success: false,
-      eventsCreated: 0,
-      message: 'Failed to fetch busy slots from calendar. Cannot schedule without conflict detection. Please check your Google Calendar connection and try again.'
-    };
+    console.log(`[SMART-SCHEDULE] ℹ️ No busy slots found - calendar appears to be free`);
+    console.log(`[SMART-SCHEDULE] Will still check for conflicts with app-created events`);
   }
   
   // Track scheduled slots so they don't overlap - make a deep copy to avoid reference issues
