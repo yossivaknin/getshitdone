@@ -30,6 +30,31 @@ export async function getBusySlots(
   console.log('[CALENDAR] Fetching busy slots...');
   console.log('[CALENDAR] Time range:', timeMin.toISOString(), 'to', timeMax.toISOString());
   
+  // First, verify token has calendar scope
+  try {
+    const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
+    if (tokenInfoResponse.ok) {
+      const tokenInfo = await tokenInfoResponse.json();
+      console.log('[CALENDAR] Token info:', {
+        expires_in: tokenInfo.expires_in,
+        scope: tokenInfo.scope,
+        audience: tokenInfo.audience
+      });
+      
+      // Check if token has calendar scope
+      if (tokenInfo.scope && !tokenInfo.scope.includes('calendar')) {
+        console.error('[CALENDAR] ❌ Token does NOT have calendar scope!');
+        console.error('[CALENDAR] Token scope:', tokenInfo.scope);
+        throw new Error('Token does not have Google Calendar scope. Please reconnect Google Calendar in Settings and grant calendar permissions.');
+      }
+    } else {
+      console.warn('[CALENDAR] ⚠️ Could not verify token info, proceeding anyway');
+    }
+  } catch (error) {
+    console.warn('[CALENDAR] ⚠️ Error checking token info:', error);
+    // Continue anyway - the API call will fail with a better error
+  }
+  
   try {
     const requestBody = {
       timeMin: timeMin.toISOString(),
@@ -38,6 +63,8 @@ export async function getBusySlots(
     };
     
     console.log('[CALENDAR] Request body:', JSON.stringify(requestBody, null, 2));
+    console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
+    console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
     const response = await fetch(
       `https://www.googleapis.com/calendar/v3/freebusy`,
@@ -52,6 +79,7 @@ export async function getBusySlots(
     );
     
     console.log('[CALENDAR] Response status:', response.status, response.statusText);
+    console.log('[CALENDAR] Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -83,9 +111,25 @@ export async function getBusySlots(
       
       // Provide specific guidance based on status code
       if (response.status === 404) {
-        throw new Error(`Google Calendar API endpoint not found (404). Please verify that the Calendar API is enabled in your Google Cloud Console: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com`);
+        // Check if it's an HTML 404 (API not enabled) vs JSON 404 (different issue)
+        if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+          throw new Error(`Google Calendar API returned 404 HTML page. This usually means:
+1. The Calendar API is NOT enabled in your Google Cloud project
+2. OR you enabled it in a DIFFERENT project than your OAuth credentials
+3. OR there's a billing/quota issue
+
+Please verify:
+- Calendar API is enabled in the SAME project as your OAuth Client ID
+- Go to: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
+- Make sure you're in the correct project (check your OAuth Client ID project)`);
+        } else {
+          throw new Error(`Google Calendar API endpoint not found (404). This might mean the API is enabled in a different project than your OAuth credentials. Please verify both are in the same Google Cloud project.`);
+        }
       } else if (response.status === 403) {
-        throw new Error(`Google Calendar API access denied (403). Please check that your OAuth token has the calendar scope and that the Calendar API is enabled.`);
+        throw new Error(`Google Calendar API access denied (403). Possible causes:
+1. Token doesn't have calendar scope - reconnect and grant calendar permissions
+2. Calendar API not enabled in the project
+3. Billing/quota restrictions`);
       } else if (response.status === 401) {
         throw new Error(`Google Calendar API authentication failed (401). Your access token may have expired. Please reconnect your Google Calendar in Settings.`);
       }
