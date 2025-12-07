@@ -33,3 +33,4 @@ CREATE POLICY "Users can delete their own workspaces."
 -- Verify RLS is enabled
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
+

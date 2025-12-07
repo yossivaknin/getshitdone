@@ -27,3 +27,4 @@ CREATE POLICY "Users can update own profile."
 -- Verify RLS is enabled
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+

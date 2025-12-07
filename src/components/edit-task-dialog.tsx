@@ -30,6 +30,8 @@ interface EditTaskDialogProps {
     duration?: number;
     list_id?: string;
     description?: string;
+    chunkCount?: number;
+    chunkDuration?: number;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +89,17 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       setDescription(task.description || '');
       setDuration(task.duration?.toString() || '30'); // Default to 30 minutes
       setSelectedTags(task.tags?.map(t => t.name) || []);
+      
+      // Load chunking settings from task
+      if (task.chunkCount && task.chunkCount > 1 && task.chunkDuration) {
+        setManualChunking(true);
+        setChunkCount(task.chunkCount);
+        setChunkDuration(task.chunkDuration);
+      } else {
+        setManualChunking(false);
+        setChunkCount(1);
+        setChunkDuration(30);
+      }
       
       // Set default date to today if no due date
       const today = new Date();
@@ -173,6 +186,9 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
         name,
         color: getTagColorForTask(name)
       })),
+      // Save chunking settings
+      chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
+      chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
     };
 
     onUpdateTask(updatedTask);
@@ -183,7 +199,7 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
   const handleScheduleAndSave = async () => {
     const taskDuration = duration ? parseInt(duration) : task.duration;
     
-    if (!taskDuration) {
+    if (!taskDuration || taskDuration <= 0) {
       toast.error('Task must have a duration to schedule');
       return;
     }
@@ -208,9 +224,20 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
         ? chunkCount * chunkDuration 
         : taskDuration;
 
-      // Get working hours from localStorage
-      const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
-      const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+      // Get working hours from localStorage (check both possible key formats)
+      const workingHoursStart = localStorage.getItem('workingHoursStart') || localStorage.getItem('working_hours_start') || '09:00';
+      const workingHoursEnd = localStorage.getItem('workingHoursEnd') || localStorage.getItem('working_hours_end') || '18:00';
+
+      console.log('[EDIT-DIALOG] Scheduling task:', {
+        id: task.id,
+        title,
+        duration: finalDuration,
+        dueDate: finalDueDate,
+        chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
+        chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
+        workingHoursStart,
+        workingHoursEnd
+      });
 
       const result = await scheduleTask({
         id: task.id,
@@ -221,6 +248,8 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
         chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
         chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
       }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd);
+      
+      console.log('[EDIT-DIALOG] Schedule result:', result);
       
       if (result.success) {
         // Validate duration
@@ -244,17 +273,23 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
             color: getTagColorForTask(name)
           })),
           googleEventIds: result.eventIds || [],
+          // Save chunking settings
+          chunkCount: manualChunking && chunkCount > 1 ? chunkCount : undefined,
+          chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
         };
 
         onUpdateTask(updatedTask);
         onOpenChange(false);
         toast.success('Task scheduled and saved successfully!');
       } else {
-        toast.error(result.message);
+        const errorMessage = result.message || 'Failed to schedule task. Please check your calendar connection.';
+        console.error('[EDIT-DIALOG] Schedule failed:', errorMessage);
+        toast.error(errorMessage);
       }
-    } catch (error) {
-      console.error('Schedule error:', error);
-      toast.error('Failed to schedule task. Please check your calendar connection.');
+    } catch (error: any) {
+      console.error('[EDIT-DIALOG] Schedule error:', error);
+      const errorMessage = error?.message || 'Failed to schedule task. Please check your calendar connection.';
+      toast.error(errorMessage);
     } finally {
       setIsScheduling(false);
     }

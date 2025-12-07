@@ -43,11 +43,12 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Allow access to landing page, login page, auth callback, and API routes
+    // Allow access to landing page, login page, auth callback, API routes, and debug pages
     if (request.nextUrl.pathname === '/' ||
         request.nextUrl.pathname.startsWith('/login') || 
         request.nextUrl.pathname.startsWith('/auth/callback') ||
-        request.nextUrl.pathname.startsWith('/api/')) {
+        request.nextUrl.pathname.startsWith('/api/') ||
+        request.nextUrl.pathname.startsWith('/debug-slots')) {
       return response
     }
 

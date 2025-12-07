@@ -93,3 +93,4 @@ Look for the exact error message - it might give more clues.
 
 If nothing else works, try `supabase/fix-tasks-rls-v2.sql` - it's more thorough and will show you what policies were created.
 
+

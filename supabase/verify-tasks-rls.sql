@@ -26,3 +26,4 @@ WHERE tablename = 'tasks';
 -- This is just for verification - you need to be authenticated to test insert
 SELECT auth.uid() as current_user_id;
 
+

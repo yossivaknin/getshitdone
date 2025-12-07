@@ -74,3 +74,4 @@ create index if not exists tasks_user_id_idx on tasks(user_id);
 create index if not exists tasks_status_idx on tasks(status);
 create index if not exists tasks_list_id_idx on tasks(list_id);
 
+

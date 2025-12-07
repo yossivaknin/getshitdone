@@ -56,3 +56,4 @@ You can also use the migration file I created:
 
 This will safely add the column only if it doesn't already exist.
 
+

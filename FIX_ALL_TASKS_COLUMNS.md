@@ -129,3 +129,4 @@ ORDER BY ordinal_position;
 
 Run this in Supabase SQL Editor to see what you have.
 
+

@@ -7,20 +7,20 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
   try {
     console.log('[TEST] Starting Calendar API test...');
     console.log('[TEST] Token preview:', accessToken.substring(0, 20) + '...');
-    
+
     // Test token validity and get detailed info
     let validToken = accessToken;
-    
+
     console.log('[TEST] Step 1: Validating token...');
     const tokenTest = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`);
-    
+
     if (!tokenTest.ok) {
       const errorText = await tokenTest.text();
       console.error('[TEST] Token validation failed:', {
         status: tokenTest.status,
         error: errorText
       });
-      
+
       if (refreshToken) {
         console.log('[TEST] Token expired, attempting refresh...');
         const newToken = await refreshAccessToken(refreshToken);
@@ -49,7 +49,7 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         audience: tokenInfo.audience,
         issued_to: tokenInfo.issued_to
       });
-      
+
       // Verify calendar scope
       if (!tokenInfo.scope || !tokenInfo.scope.includes('calendar')) {
         return {
@@ -59,7 +59,7 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         };
       }
     }
-    
+
     // Test 2: Try a simple Calendar API call first (list calendars)
     console.log('[TEST] Step 2: Testing Calendar API access with simple call...');
     try {
@@ -68,17 +68,17 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
           'Authorization': `Bearer ${validToken}`,
         },
       });
-      
+
       console.log('[TEST] Calendar list API response:', {
         status: calendarListResponse.status,
         statusText: calendarListResponse.statusText,
         ok: calendarListResponse.ok
       });
-      
+
       if (!calendarListResponse.ok) {
         const errorText = await calendarListResponse.text();
         console.error('[TEST] Calendar list API failed:', errorText.substring(0, 500));
-        
+
         if (calendarListResponse.status === 404) {
           return {
             success: false,
@@ -97,34 +97,35 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         details: error.message || String(error)
       };
     }
-    
+
     const config: CalendarConfig = {
       accessToken: validToken,
       workingHoursStart: '09:00',
       workingHoursEnd: '18:00'
     };
-    
+
     // Test 3: Get busy slots (FreeBusy API)
     console.log('[TEST] Step 3: Testing FreeBusy API...');
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const busySlots = await getBusySlots(config, now, tomorrow);
-    
+
     // Test 2: Create a test event
     const testStart = new Date(now);
     testStart.setHours(10, 0, 0, 0); // 10 AM today
     const testEnd = new Date(testStart);
     testEnd.setMinutes(testEnd.getMinutes() + 30); // 30 minutes
-    
+
     const testEventId = await createCalendarEvent(
       config,
       '[Focus] Test Event - Please Delete',
       testStart,
       testEnd
     );
-    
+
+
     return {
       success: true,
       message: 'Calendar API is working!',
@@ -137,7 +138,7 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
   } catch (error: any) {
     console.error('[TEST] Calendar API test error:', error);
     const errorMessage = error.message || String(error);
-    
+
     // Provide more specific error messages
     let userMessage = 'Calendar API test failed';
     if (errorMessage.includes('404')) {
@@ -147,7 +148,7 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
     } else if (errorMessage.includes('401')) {
       userMessage = 'Calendar API authentication failed (401). Your token may have expired. Please reconnect.';
     }
-    
+
     return {
       success: false,
       message: userMessage,

@@ -10,10 +10,13 @@ import toast from 'react-hot-toast';
 import { testCalendarAPI } from '@/app/test-calendar';
 import { listCalendarEvents } from '@/app/debug-calendar';
 import { TagManager } from '@/components/tag-manager';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 
 export default function SettingsPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [connectionError, setConnectionError] = useState<{title: string, message: string, link?: string} | null>(null);
   const [workingHoursStart, setWorkingHoursStart] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('working_hours_start') || '09:00';
@@ -57,6 +60,7 @@ export default function SettingsPage() {
       if (savedToken === token) {
         console.log('[Settings] ✅ Token saved successfully');
         setIsConnected(true);
+        setConnectionError(null);
         toast.success('Successfully connected to Google Calendar!');
       } else {
         console.error('[Settings] ❌ Token save failed!');
@@ -130,6 +134,7 @@ export default function SettingsPage() {
 
   const handleConnectGoogle = async () => {
     setIsLoading(true);
+    setConnectionError(null);
     
     try {
       // Generate OAuth URL
@@ -179,6 +184,7 @@ export default function SettingsPage() {
     localStorage.removeItem('google_calendar_token');
     localStorage.removeItem('google_calendar_refresh_token');
     setIsConnected(false);
+    setConnectionError(null);
     toast.success('Disconnected from Google Calendar');
   };
 
@@ -192,6 +198,7 @@ export default function SettingsPage() {
     }
 
     setIsLoading(true);
+    setConnectionError(null);
     try {
       const result = await testCalendarAPI(accessToken, refreshToken || undefined);
       if (result.success) {
@@ -202,21 +209,34 @@ export default function SettingsPage() {
         const errorMessage = result.details 
           ? `${result.message}: ${result.details}` 
           : result.message;
-        toast.error(errorMessage, { duration: 6000 });
+        toast.error(result.message, { duration: 6000 });
         console.error('[TEST] Test failed:', {
           message: result.message,
           details: result.details
         });
         
         // If it's a 404 error, show specific guidance
-        if (result.details && result.details.includes('404')) {
+        if (result.details && typeof result.details === 'string' && result.details.includes('404')) {
           console.error('[TEST] ❌ 404 Error detected - Calendar API likely not enabled or in wrong project');
-          console.error('[TEST] Please check: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com');
+          setConnectionError({
+            title: 'Google Calendar API Not Enabled',
+            message: 'The Google Calendar API returned a 404 error. This usually means the API is not enabled in your Google Cloud project, or it is enabled in a different project than your OAuth credentials.',
+            link: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'
+          });
+        } else {
+          setConnectionError({
+            title: 'Connection Test Failed',
+            message: result.message || 'Unknown error occurred during test.',
+          });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Test error:', error);
       toast.error('Failed to test connection');
+      setConnectionError({
+        title: 'Test Error',
+        message: error.message || 'An unexpected error occurred.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -351,6 +371,26 @@ export default function SettingsPage() {
               </Button>
             )}
           </div>
+
+          {connectionError && (
+            <Alert variant="destructive" className="mb-4 border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{connectionError.title}</AlertTitle>
+              <AlertDescription className="mt-2 flex flex-col gap-2">
+                <p>{connectionError.message}</p>
+                {connectionError.link && (
+                  <a 
+                    href={connectionError.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-medium underline hover:text-red-800 w-fit"
+                  >
+                    Enable Calendar API <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {isConnected && (
             <div className="mt-4 pt-4 border-t border-gray-200">

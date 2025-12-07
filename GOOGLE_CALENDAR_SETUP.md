@@ -147,3 +147,4 @@ This allows users to connect their Google Calendar to automatically schedule tas
 
 **That's it!** Once set up, users can connect their Google Calendar and tasks will sync automatically.
 
+

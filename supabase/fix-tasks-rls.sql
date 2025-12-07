@@ -33,3 +33,4 @@ CREATE POLICY "Users can delete their own tasks."
 -- Verify RLS is enabled
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
+
