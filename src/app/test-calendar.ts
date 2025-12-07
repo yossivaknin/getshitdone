@@ -100,23 +100,30 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
 
       if (!calendarListResponse.ok) {
         const errorText = await calendarListResponse.text();
+        const isHtml = errorText.includes('<!DOCTYPE html>') || errorText.includes('<html');
+        
         console.error('[TEST] Calendar list API failed:', {
           status: calendarListResponse.status,
           statusText: calendarListResponse.statusText,
           errorPreview: errorText.substring(0, 500),
-          isHtml: errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')
+          isHtml: isHtml,
+          responseHeaders: Object.fromEntries(calendarListResponse.headers.entries())
         });
 
         if (calendarListResponse.status === 404) {
           // Check if it's an HTML 404 (API not accessible) vs JSON 404
-          if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+          if (isHtml) {
+            // Even with billing enabled, sometimes API needs to be refreshed
             return {
               success: false,
-              message: 'Calendar API returned 404 HTML page. This usually means billing is not enabled or the API needs more time to propagate. Even though your project is correctly configured, Google Calendar API requires billing to be enabled (even on free tier).',
-              details: `Status: ${calendarListResponse.status}. The API is enabled but not accessible. Please check:
-1. Billing is enabled: https://console.cloud.google.com/billing
-2. Wait 5-10 minutes after enabling API
-3. Check quotas: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas`
+              message: 'Calendar API returned 404 HTML page. Even though billing is enabled and project is correctly configured, try: 1) Disable and re-enable Calendar API, 2) Wait 10-15 minutes, 3) Check for organization policies or restrictions.',
+              details: `Status: ${calendarListResponse.status}. HTML 404 response received. This can happen even with correct configuration. Try:
+1. Disable Calendar API: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com
+2. Wait 30 seconds
+3. Re-enable it
+4. Wait 10-15 minutes for full propagation
+5. Check organization policies: https://console.cloud.google.com/iam-admin/orgpolicies
+6. Verify API is accessible: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/overview`
             };
           } else {
             return {
