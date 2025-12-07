@@ -16,7 +16,7 @@ import { AlertTriangle, ExternalLink } from 'lucide-react';
 export default function SettingsPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [connectionError, setConnectionError] = useState<{title: string, message: string, link?: string} | null>(null);
+  const [connectionError, setConnectionError] = useState<{ title: string, message: string, link?: string } | null>(null);
   const [workingHoursStart, setWorkingHoursStart] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('working_hours_start') || '09:00';
@@ -36,25 +36,25 @@ export default function SettingsPage() {
     // Set redirect URI on client side only
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     setRedirectUri(`${baseUrl}/api/auth/google/callback`);
-    
+
     // Check URL params for OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     const connected = urlParams.get('connected');
     const token = urlParams.get('token');
     const refresh = urlParams.get('refresh');
-    
+
     if (connected === 'true' && token) {
       console.log('[Settings] OAuth callback received:', {
         hasToken: !!token,
         hasRefresh: !!refresh,
         tokenLength: token.length
       });
-      
+
       localStorage.setItem('google_calendar_token', token);
       if (refresh) {
         localStorage.setItem('google_calendar_refresh_token', refresh);
       }
-      
+
       // Verify token was saved
       const savedToken = localStorage.getItem('google_calendar_token');
       if (savedToken === token) {
@@ -66,7 +66,7 @@ export default function SettingsPage() {
         console.error('[Settings] ❌ Token save failed!');
         toast.error('Failed to save token. Please try again.');
       }
-      
+
       // Clean URL
       window.history.replaceState({}, '', '/settings');
     } else if (urlParams.get('error')) {
@@ -74,7 +74,7 @@ export default function SettingsPage() {
       console.error('[Settings] OAuth error:', error);
       toast.error(`Connection failed: ${error}. Please try again.`);
     }
-    
+
     checkConnectionStatus();
   }, []);
 
@@ -83,16 +83,16 @@ export default function SettingsPage() {
       // Check if we have stored tokens
       const token = localStorage.getItem('google_calendar_token');
       const refreshToken = localStorage.getItem('google_calendar_refresh_token');
-      
+
       if (!token) {
         setIsConnected(false);
         return;
       }
-      
+
       // Validate token by making a test API call
       try {
         const response = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${token}`);
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log('[Settings] Token is valid:', {
@@ -106,7 +106,7 @@ export default function SettingsPage() {
             console.log('[Settings] Token invalid, attempting refresh...');
             const { refreshAccessToken } = await import('@/lib/token-refresh');
             const newToken = await refreshAccessToken(refreshToken);
-            
+
             if (newToken) {
               localStorage.setItem('google_calendar_token', newToken);
               setIsConnected(true);
@@ -135,24 +135,24 @@ export default function SettingsPage() {
   const handleConnectGoogle = async () => {
     setIsLoading(true);
     setConnectionError(null);
-    
+
     try {
       // Generate OAuth URL
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
-      
+
       // Use NEXT_PUBLIC_APP_URL if set, otherwise use current origin
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const redirectUri = `${baseUrl}/api/auth/google/callback`;
-      
+
       // Log for debugging
       console.log('[OAuth Debug] Redirect URI:', redirectUri);
       console.log('[OAuth Debug] Current origin:', window.location.origin);
       console.log('[OAuth Debug] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
       console.log('[OAuth Debug] Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
-      
+
       const scope = 'https://www.googleapis.com/auth/calendar';
       const responseType = 'code';
-      
+
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${encodeURIComponent(clientId)}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
@@ -191,7 +191,7 @@ export default function SettingsPage() {
   const handleTestConnection = async () => {
     const accessToken = localStorage.getItem('google_calendar_token');
     const refreshToken = localStorage.getItem('google_calendar_refresh_token');
-    
+
     if (!accessToken) {
       toast.error('Not connected to Google Calendar');
       return;
@@ -206,21 +206,22 @@ export default function SettingsPage() {
         console.log('Test details:', result.details);
       } else {
         // Show detailed error message
-        const errorMessage = result.details 
-          ? `${result.message}: ${result.details}` 
+        const errorMessage = result.details
+          ? `${result.message}: ${result.details}`
           : result.message;
         toast.error(result.message, { duration: 6000 });
         console.error('[TEST] Test failed:', {
           message: result.message,
           details: result.details
         });
-        
+
         // If it's a 404 error, show specific guidance
         if (result.details && typeof result.details === 'string' && result.details.includes('404')) {
           console.error('[TEST] ❌ 404 Error detected - Calendar API likely not enabled or in wrong project');
+          const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'Unknown';
           setConnectionError({
-            title: 'Google Calendar API Not Enabled',
-            message: 'The Google Calendar API returned a 404 error. This usually means the API is not enabled in your Google Cloud project, or it is enabled in a different project than your OAuth credentials.',
+            title: 'Project Mismatch Detected',
+            message: `The Calendar API returned a 404 error. This usually means the API is enabled in a DIFFERENT project than your OAuth credentials.\n\nYour Client ID is: ${clientId}\n\nPlease search for this Client ID in the Google Cloud Console to find the correct project, then enable the Calendar API there.`,
             link: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'
           });
         } else {
@@ -244,7 +245,7 @@ export default function SettingsPage() {
 
   const handleListEvents = async () => {
     const accessToken = localStorage.getItem('google_calendar_token');
-    
+
     if (!accessToken) {
       toast.error('Not connected to Google Calendar');
       return;
@@ -315,9 +316,9 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
                 <span className="text-sm font-medium text-green-600">Connected</span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleTestConnection}
                   disabled={isLoading}
                   className="ml-2"
@@ -331,9 +332,9 @@ export default function SettingsPage() {
                     'Test Connection'
                   )}
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleListEvents}
                   disabled={isLoading}
                   className="ml-2"
@@ -355,8 +356,8 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ) : (
-              <Button 
-                onClick={handleConnectGoogle} 
+              <Button
+                onClick={handleConnectGoogle}
                 disabled={isLoading}
                 className="bg-blue-500 hover:bg-blue-600 text-white"
               >
@@ -377,11 +378,11 @@ export default function SettingsPage() {
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>{connectionError.title}</AlertTitle>
               <AlertDescription className="mt-2 flex flex-col gap-2">
-                <p>{connectionError.message}</p>
+                <p className="whitespace-pre-wrap">{connectionError.message}</p>
                 {connectionError.link && (
-                  <a 
-                    href={connectionError.link} 
-                    target="_blank" 
+                  <a
+                    href={connectionError.link}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-medium underline hover:text-red-800 w-fit"
                   >
@@ -411,7 +412,7 @@ export default function SettingsPage() {
                 <li>Add <code className="bg-gray-100 px-1 rounded">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to your .env file</li>
                 <li>Set authorized redirect URI to: <code className="bg-gray-100 px-1 rounded">{redirectUri || '/api/auth/google/callback'}</code></li>
               </ol>
-              
+
               {/* Debug Info */}
               <div className="mt-4 p-3 bg-gray-50 rounded text-xs">
                 <p className="font-semibold mb-2">Debug Info:</p>
@@ -444,7 +445,7 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-500 mb-4">
             Tasks will only be scheduled during these hours. Default: 9:00 AM - 6:00 PM
           </p>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="start-time" className="mb-2">Start Time</Label>
