@@ -100,14 +100,31 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
 
       if (!calendarListResponse.ok) {
         const errorText = await calendarListResponse.text();
-        console.error('[TEST] Calendar list API failed:', errorText.substring(0, 500));
+        console.error('[TEST] Calendar list API failed:', {
+          status: calendarListResponse.status,
+          statusText: calendarListResponse.statusText,
+          errorPreview: errorText.substring(0, 500),
+          isHtml: errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')
+        });
 
         if (calendarListResponse.status === 404) {
-          return {
-            success: false,
-            message: 'Calendar API returned 404. The API is not enabled in your Google Cloud project, or it\'s enabled in a different project than your OAuth credentials.',
-            details: `Status: ${calendarListResponse.status}. Error: ${errorText.substring(0, 200)}`
-          };
+          // Check if it's an HTML 404 (API not accessible) vs JSON 404
+          if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+            return {
+              success: false,
+              message: 'Calendar API returned 404 HTML page. This usually means billing is not enabled or the API needs more time to propagate. Even though your project is correctly configured, Google Calendar API requires billing to be enabled (even on free tier).',
+              details: `Status: ${calendarListResponse.status}. The API is enabled but not accessible. Please check:
+1. Billing is enabled: https://console.cloud.google.com/billing
+2. Wait 5-10 minutes after enabling API
+3. Check quotas: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas`
+            };
+          } else {
+            return {
+              success: false,
+              message: 'Calendar API returned 404. The API is not enabled in your Google Cloud project, or it\'s enabled in a different project than your OAuth credentials.',
+              details: `Status: ${calendarListResponse.status}. Error: ${errorText.substring(0, 200)}`
+            };
+          }
         }
       } else {
         console.log('[TEST] ✅ Calendar list API works! API is accessible.');
