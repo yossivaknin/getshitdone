@@ -3,7 +3,7 @@
 import { getBusySlots, createCalendarEvent, CalendarConfig } from '@/lib/calendar';
 import { refreshAccessToken } from '@/lib/token-refresh';
 
-export async function testCalendarAPI(accessToken: string, refreshToken?: string) {
+export async function testCalendarAPI(accessToken: string, refreshToken?: string, expectedClientId?: string) {
   try {
     console.log('[TEST] Starting Calendar API test...');
     console.log('[TEST] Token preview:', accessToken.substring(0, 20) + '...');
@@ -61,7 +61,14 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
 
       // Verify token audience (Client ID) matches current configuration
       // This prevents using a stale token from a different project
-      const configuredClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      // Use the passed expectedClientId or fall back to env var
+      const configuredClientId = expectedClientId || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+      console.log('[TEST] Validating token audience:', {
+        tokenAudience: tokenInfo.audience,
+        configuredClientId: configuredClientId,
+        source: expectedClientId ? 'frontend' : 'env'
+      });
 
       if (configuredClientId && tokenInfo.audience && tokenInfo.audience !== configuredClientId) {
         console.error('[TEST] ❌ Token audience mismatch!', {

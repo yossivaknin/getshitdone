@@ -47,12 +47,24 @@ export default function SettingsPage() {
       console.log('[Settings] OAuth callback received:', {
         hasToken: !!token,
         hasRefresh: !!refresh,
-        tokenLength: token.length
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + '...',
+        tokenStartsWith: token.substring(0, 5)
       });
+      
+      // Validate token format - access tokens usually start with 'ya29.' or similar
+      // Refresh tokens start with '1//'
+      if (token.startsWith('1//')) {
+        console.error('[Settings] ❌ ERROR: Received refresh token as access token!');
+        console.error('[Settings] This means the OAuth response had tokens swapped or missing access_token');
+        toast.error('OAuth error: Received refresh token instead of access token. Please try again.');
+        return;
+      }
 
       localStorage.setItem('google_calendar_token', token);
       if (refresh) {
         localStorage.setItem('google_calendar_refresh_token', refresh);
+        console.log('[Settings] Refresh token saved:', refresh.substring(0, 20) + '...');
       }
 
       // Verify token was saved
@@ -64,6 +76,8 @@ export default function SettingsPage() {
         toast.success('Successfully connected to Google Calendar!');
       } else {
         console.error('[Settings] ❌ Token save failed!');
+        console.error('[Settings] Expected:', token.substring(0, 20));
+        console.error('[Settings] Got:', savedToken?.substring(0, 20));
         toast.error('Failed to save token. Please try again.');
       }
 
@@ -200,7 +214,9 @@ export default function SettingsPage() {
     setIsLoading(true);
     setConnectionError(null);
     try {
-      const result = await testCalendarAPI(accessToken, refreshToken || undefined);
+      // Pass the Client ID from frontend to ensure validation works even if server env var is missing
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      const result = await testCalendarAPI(accessToken, refreshToken || undefined, clientId);
       if (result.success) {
         toast.success(result.message + ` Created test event. Check your calendar!`);
         console.log('Test details:', result.details);

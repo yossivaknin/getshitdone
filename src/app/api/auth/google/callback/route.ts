@@ -49,17 +49,40 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await tokenResponse.json();
+    
+    console.log('[OAuth Callback] Token response:', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      accessTokenLength: tokens.access_token?.length || 0,
+      refreshTokenLength: tokens.refresh_token?.length || 0,
+      tokenType: tokens.token_type,
+      expiresIn: tokens.expires_in,
+      scope: tokens.scope
+    });
+
+    // Validate that we have an access token
+    if (!tokens.access_token) {
+      console.error('[OAuth Callback] ❌ No access_token in response!');
+      console.error('[OAuth Callback] Response:', JSON.stringify(tokens, null, 2));
+      return NextResponse.redirect(
+        new URL('/settings?error=no_access_token', request.url)
+      );
+    }
 
     // Store tokens (in production, store in database)
     // For now, we'll pass them via URL params to the settings page
     // In production, use secure httpOnly cookies or database storage
     
-    return NextResponse.redirect(
-      new URL(
-        `/settings?connected=true&token=${encodeURIComponent(tokens.access_token)}&refresh=${encodeURIComponent(tokens.refresh_token || '')}`,
-        request.url
-      )
-    );
+    const redirectUrl = new URL('/settings', request.url);
+    redirectUrl.searchParams.set('connected', 'true');
+    redirectUrl.searchParams.set('token', tokens.access_token);
+    if (tokens.refresh_token) {
+      redirectUrl.searchParams.set('refresh', tokens.refresh_token);
+    }
+    
+    console.log('[OAuth Callback] Redirecting to settings with tokens');
+    
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(
