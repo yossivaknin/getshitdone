@@ -198,8 +198,21 @@ export default function SettingsPage() {
         toast.success(result.message + ` Created test event. Check your calendar!`);
         console.log('Test details:', result.details);
       } else {
-        toast.error(result.message);
-        console.error('Test failed:', result.details);
+        // Show detailed error message
+        const errorMessage = result.details 
+          ? `${result.message}: ${result.details}` 
+          : result.message;
+        toast.error(errorMessage, { duration: 6000 });
+        console.error('[TEST] Test failed:', {
+          message: result.message,
+          details: result.details
+        });
+        
+        // If it's a 404 error, show specific guidance
+        if (result.details && result.details.includes('404')) {
+          console.error('[TEST] ❌ 404 Error detected - Calendar API likely not enabled or in wrong project');
+          console.error('[TEST] Please check: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com');
+        }
       }
     } catch (error) {
       console.error('Test error:', error);

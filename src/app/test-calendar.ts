@@ -59,10 +59,23 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
       }
     };
   } catch (error: any) {
+    console.error('[TEST] Calendar API test error:', error);
+    const errorMessage = error.message || String(error);
+    
+    // Provide more specific error messages
+    let userMessage = 'Calendar API test failed';
+    if (errorMessage.includes('404')) {
+      userMessage = 'Calendar API returned 404. The API may not be enabled in your Google Cloud project, or it\'s enabled in a different project than your OAuth credentials.';
+    } else if (errorMessage.includes('403')) {
+      userMessage = 'Calendar API access denied (403). Check that your token has calendar scope and the API is enabled.';
+    } else if (errorMessage.includes('401')) {
+      userMessage = 'Calendar API authentication failed (401). Your token may have expired. Please reconnect.';
+    }
+    
     return {
       success: false,
-      message: 'Calendar API test failed',
-      details: error.message || String(error)
+      message: userMessage,
+      details: errorMessage
     };
   }
 }
