@@ -58,6 +58,22 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
           details: `Token scope: ${tokenInfo.scope || 'none'}`
         };
       }
+
+      // Verify token audience (Client ID) matches current configuration
+      // This prevents using a stale token from a different project
+      const configuredClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+      if (configuredClientId && tokenInfo.audience && tokenInfo.audience !== configuredClientId) {
+        console.error('[TEST] ❌ Token audience mismatch!', {
+          tokenAudience: tokenInfo.audience,
+          configuredClientId: configuredClientId
+        });
+        return {
+          success: false,
+          message: 'Token mismatch: The stored token belongs to a different Google Cloud Project. Please disconnect and reconnect.',
+          details: `Token Client ID: ${tokenInfo.audience}\nConfigured Client ID: ${configuredClientId}`
+        };
+      }
     }
 
     // Test 2: Try a simple Calendar API call first (list calendars)

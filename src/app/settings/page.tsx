@@ -224,6 +224,14 @@ export default function SettingsPage() {
             message: `The Calendar API returned a 404 error. This usually means the API is enabled in a DIFFERENT project than your OAuth credentials.\n\nYour Client ID is: ${clientId}\n\nPlease search for this Client ID in the Google Cloud Console to find the correct project, then enable the Calendar API there.`,
             link: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'
           });
+        } else if (result.message && result.message.includes('Token mismatch')) {
+          console.error('[TEST] ❌ Token mismatch detected');
+          setConnectionError({
+            title: 'Configuration Changed',
+            message: 'Your Google Calendar configuration has changed. The stored token belongs to a different project. Please disconnect and reconnect to fix this.',
+          });
+          // Optional: Automatically disconnect?
+          // handleDisconnect(); 
         } else {
           setConnectionError({
             title: 'Connection Test Failed',
