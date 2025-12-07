@@ -101,21 +101,27 @@ export async function getBusySlots(
       // Check if we got an HTML response (404 page) - this usually means API isn't enabled
       if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
         console.error('[CALENDAR] ❌ Got HTML 404 response');
-        console.error('[CALENDAR] Full error response (first 500 chars):', errorText.substring(0, 500));
+        console.error('[CALENDAR] Full error response (first 1000 chars):', errorText.substring(0, 1000));
+        console.error('[CALENDAR] Response URL:', response.url);
+        console.error('[CALENDAR] Response headers:', Object.fromEntries(response.headers.entries()));
         
-        // Even though project is configured correctly, 404 HTML suggests:
-        // 1. API might need billing enabled
-        // 2. API might need time to propagate (wait longer)
-        // 3. There might be quota restrictions
-        throw new Error(`Google Calendar API returned 404 HTML page. Even though your project is correctly configured, this might mean:
-1. Billing needs to be enabled (even on free tier, some APIs require billing setup)
-2. API enablement needs more time to propagate (wait 5-10 minutes)
-3. There are quota restrictions on the API
+        // If it was working before and suddenly stopped, possible causes:
+        // 1. OAuth consent screen needs re-verification
+        // 2. API quotas were hit
+        // 3. Google made API changes
+        // 4. The API got disabled somehow
+        throw new Error(`Google Calendar API returned 404 HTML page. Since this was working before and suddenly stopped, possible causes:
+1. OAuth consent screen needs re-verification: https://console.cloud.google.com/apis/credentials/consent
+2. API quotas were hit: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas
+3. The API got disabled: Check https://console.cloud.google.com/apis/dashboard
+4. Google API changes or temporary issues
 
-Please check:
-- Billing is enabled: https://console.cloud.google.com/billing
-- Wait 5-10 minutes after enabling API
-- Check quotas: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas`);
+Try:
+- Re-verify OAuth consent screen
+- Check if API is still enabled
+- Check quotas for any limits
+- Disable and re-enable Calendar API
+- Wait 10-15 minutes and try again`);
       }
       
       try {
