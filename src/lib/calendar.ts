@@ -100,8 +100,22 @@ export async function getBusySlots(
       
       // Check if we got an HTML response (404 page) - this usually means API isn't enabled
       if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
-        console.error('[CALENDAR] ❌ Got HTML 404 response - Calendar API likely not enabled');
-        throw new Error(`Google Calendar API returned 404. The Calendar API may not be enabled in your Google Cloud project. Please enable it at: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com`);
+        console.error('[CALENDAR] ❌ Got HTML 404 response');
+        console.error('[CALENDAR] Full error response (first 500 chars):', errorText.substring(0, 500));
+        
+        // Even though project is configured correctly, 404 HTML suggests:
+        // 1. API might need billing enabled
+        // 2. API might need time to propagate (wait longer)
+        // 3. There might be quota restrictions
+        throw new Error(`Google Calendar API returned 404 HTML page. Even though your project is correctly configured, this might mean:
+1. Billing needs to be enabled (even on free tier, some APIs require billing setup)
+2. API enablement needs more time to propagate (wait 5-10 minutes)
+3. There are quota restrictions on the API
+
+Please check:
+- Billing is enabled: https://console.cloud.google.com/billing
+- Wait 5-10 minutes after enabling API
+- Check quotas: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas`);
       }
       
       try {
