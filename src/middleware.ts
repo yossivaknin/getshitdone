@@ -48,7 +48,8 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/login') || 
         request.nextUrl.pathname.startsWith('/auth/callback') ||
         request.nextUrl.pathname.startsWith('/api/') ||
-        request.nextUrl.pathname.startsWith('/debug-slots')) {
+        request.nextUrl.pathname.startsWith('/debug-slots') ||
+        request.nextUrl.pathname.startsWith('/test-oauth')) {
       return response
     }
 
