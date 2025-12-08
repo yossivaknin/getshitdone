@@ -121,41 +121,39 @@ export default function DebugSlotsPage() {
                 className="mt-1"
               />
             </div>
-            {!tokenFound && (
-              <div className="border border-gray-300 rounded p-4 bg-gray-50">
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="useManualToken"
-                    checked={useManualToken}
-                    onChange={(e) => setUseManualToken(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  <Label htmlFor="useManualToken" className="text-sm font-semibold">
-                    Use manual token (paste from browser console)
-                  </Label>
-                </div>
-                {useManualToken && (
-                  <div className="mt-2">
-                    <Label htmlFor="manualToken" className="text-xs text-gray-600">
-                      Google Calendar Access Token
-                    </Label>
-                    <Input
-                      id="manualToken"
-                      type="text"
-                      value={manualToken}
-                      onChange={(e) => setManualToken(e.target.value)}
-                      placeholder="Paste your access token here..."
-                      className="mt-1 text-xs font-mono"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      To get your token: Open browser console, type: <code className="bg-gray-200 px-1 rounded">localStorage.getItem('google_calendar_token')</code>
-                    </p>
-                  </div>
-                )}
+            <div className="border border-gray-300 rounded p-4 bg-gray-50">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="useManualToken"
+                  checked={useManualToken}
+                  onChange={(e) => setUseManualToken(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="useManualToken" className="text-sm font-semibold">
+                  Use manual token (paste from browser console)
+                </Label>
               </div>
-            )}
-            <Button onClick={handleTest} disabled={loading || (!tokenFound && !useManualToken)}>
+              {useManualToken && (
+                <div className="mt-2">
+                  <Label htmlFor="manualToken" className="text-xs text-gray-600">
+                    Google Calendar Access Token
+                  </Label>
+                  <Input
+                    id="manualToken"
+                    type="text"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value)}
+                    placeholder="Paste your access token here..."
+                    className="mt-1 text-xs font-mono"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    To get your token: Open browser console, type: <code className="bg-gray-200 px-1 rounded">localStorage.getItem('google_calendar_token')</code>
+                  </p>
+                </div>
+              )}
+            </div>
+            <Button onClick={handleTest} disabled={loading || (!tokenFound && !useManualToken && !manualToken.trim())}>
               {loading ? 'Loading...' : 'Check Available Slots'}
             </Button>
             {debugInfo && (
