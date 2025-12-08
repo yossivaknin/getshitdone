@@ -160,8 +160,24 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('[DEBUG] Error:', error)
+    
+    // Provide detailed error information
+    let errorMessage = error.message || 'Failed to fetch slots'
+    let errorDetails: any = {
+      message: errorMessage,
+      stack: error.stack
+    }
+    
+    // If it's a 404 HTML error, provide specific guidance
+    if (errorMessage.includes('404') || errorMessage.includes('HTML')) {
+      errorDetails.suggestion = 'This 404 error usually means: 1) Calendar API not enabled, 2) Billing not enabled, 3) API in different project than OAuth credentials, or 4) API needs to be refreshed (disable/re-enable)'
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch slots' },
+      { 
+        error: errorMessage,
+        details: errorDetails
+      },
       { status: 500 }
     )
   }

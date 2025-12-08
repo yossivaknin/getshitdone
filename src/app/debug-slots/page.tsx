@@ -89,9 +89,13 @@ export default function DebugSlotsPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Failed to fetch slots')
+        const errorMsg = data.error || 'Failed to fetch slots'
+        const details = data.details ? `\n\nDetails: ${JSON.stringify(data.details, null, 2)}` : ''
+        setError(errorMsg + details)
+        console.error('[DEBUG] API Error:', data)
       } else {
         setResult(data)
+        console.log('[DEBUG] Success!', data)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to test')
