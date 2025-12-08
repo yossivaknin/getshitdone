@@ -171,6 +171,7 @@ export async function loginWithGoogle() {
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        scopes: 'email profile https://www.googleapis.com/auth/calendar',
       },
     })
 
