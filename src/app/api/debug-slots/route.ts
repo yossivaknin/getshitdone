@@ -45,6 +45,9 @@ export async function GET(request: NextRequest) {
     const busySlots = await getBusySlots(config, dayStart, dayEnd)
     
     // Also fetch [Focus] events
+    // Get Google Cloud project ID from environment or use default
+    const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619'
+    
     let focusEventSlots: any[] = []
     try {
       const eventsResponse = await fetch(
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
           },
         }
       )

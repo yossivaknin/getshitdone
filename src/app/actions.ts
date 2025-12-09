@@ -540,6 +540,9 @@ export async function scheduleTask(
       const timeMin = now.toISOString()
       const timeMax = dueDate.toISOString()
       
+      // Get Google Cloud project ID from environment or use default
+      const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619'
+      
       // Fetch all events with "[Focus]" in the title from Google Calendar
       const eventsResponse = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
@@ -552,6 +555,7 @@ export async function scheduleTask(
         {
           headers: {
             'Authorization': `Bearer ${validToken}`,
+            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
           },
         }
       )

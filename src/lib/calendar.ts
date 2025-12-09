@@ -78,6 +78,9 @@ export async function getBusySlots(
     console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
+    // Get Google Cloud project ID from environment or use default
+    const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+    
     const response = await fetch(
       `https://www.googleapis.com/calendar/v3/freebusy`,
       {
@@ -85,6 +88,7 @@ export async function getBusySlots(
         headers: {
           'Authorization': `Bearer ${config.accessToken}`,
           'Content-Type': 'application/json',
+          'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
         },
         body: JSON.stringify(requestBody),
       }
@@ -504,6 +508,9 @@ export async function createCalendarEvent(
     console.log('[EVENT] Request body:', JSON.stringify(eventData, null, 2));
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
+    // Get Google Cloud project ID from environment or use default
+    const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+    
     const response = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events`,
       {
@@ -511,6 +518,7 @@ export async function createCalendarEvent(
         headers: {
           'Authorization': `Bearer ${config.accessToken}`,
           'Content-Type': 'application/json',
+          'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
         },
         body: JSON.stringify(eventData),
       }
@@ -557,11 +565,15 @@ export async function createCalendarEvent(
     
     // Verify the event was actually created by fetching it back
     try {
+      // Get Google Cloud project ID from environment or use default
+      const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+      
       const verifyResponse = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.id}`,
         {
           headers: {
             'Authorization': `Bearer ${config.accessToken}`,
+            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
           },
         }
       );
