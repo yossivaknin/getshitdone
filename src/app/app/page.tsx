@@ -46,6 +46,36 @@ export default function UnifiedViewPage() {
     }
   }, []);
 
+  // Check for Google token from Supabase OAuth on mount
+  useEffect(() => {
+    // Check URL params for Google token from Supabase OAuth
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleToken = urlParams.get('google_token');
+    const googleRefresh = urlParams.get('google_refresh');
+    const fromSupabase = urlParams.get('from_supabase');
+
+    if (fromSupabase === 'true' && googleToken) {
+      console.log('[App] Extracting Google token from Supabase OAuth session');
+      
+      // Validate token format
+      if (!googleToken.startsWith('1//')) {
+        // It's an access token, save it
+        localStorage.setItem('google_calendar_token', googleToken);
+        console.log('[App] ✅ Google Calendar access token saved from Supabase session');
+        
+        if (googleRefresh) {
+          localStorage.setItem('google_calendar_refresh_token', googleRefresh);
+          console.log('[App] ✅ Google Calendar refresh token saved from Supabase session');
+        }
+        
+        // Clean URL
+        window.history.replaceState({}, '', '/app');
+        
+        toast.success('Google Calendar connected! You can now schedule tasks.');
+      }
+    }
+  }, []);
+
   // Load tasks from database on mount
   useEffect(() => {
     const loadTasks = async () => {
