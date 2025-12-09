@@ -78,11 +78,18 @@ export async function getBusySlots(
     console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
-    // Get Google Cloud project ID from environment or use default
-    const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+    // Get Google Cloud project ID and API key from environment
+    const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+    const googleApiKey = process.env.GOOGLE_API_KEY;
+    
+    // Build URL with API key if available (helps with project identification)
+    let apiUrl = `https://www.googleapis.com/calendar/v3/freebusy`;
+    if (googleApiKey) {
+      apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
+    }
     
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/freebusy`,
+      apiUrl,
       {
         method: 'POST',
         headers: {
@@ -508,11 +515,18 @@ export async function createCalendarEvent(
     console.log('[EVENT] Request body:', JSON.stringify(eventData, null, 2));
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
-    // Get Google Cloud project ID from environment or use default
-    const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+    // Get Google Cloud project ID and API key from environment
+    const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+    const googleApiKey = process.env.GOOGLE_API_KEY;
+    
+    // Build URL with API key if available (helps with project identification)
+    let apiUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+    if (googleApiKey) {
+      apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
+    }
     
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events`,
+      apiUrl,
       {
         method: 'POST',
         headers: {
@@ -565,11 +579,18 @@ export async function createCalendarEvent(
     
     // Verify the event was actually created by fetching it back
     try {
-      // Get Google Cloud project ID from environment or use default
-      const googleProjectId = process.env.GOOGLE_PROJECT_ID || 'fast-asset-287619';
+      // Get Google Cloud project ID and API key from environment
+      const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+      const googleApiKey = process.env.GOOGLE_API_KEY;
+      
+      // Build URL with API key if available
+      let verifyUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.id}`;
+      if (googleApiKey) {
+        verifyUrl += `?key=${encodeURIComponent(googleApiKey)}`;
+      }
       
       const verifyResponse = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.id}`,
+        verifyUrl,
         {
           headers: {
             'Authorization': `Bearer ${config.accessToken}`,
