@@ -233,11 +233,10 @@ export default function SettingsPage() {
 
         // If it's a 404 error, show specific guidance
         if (result.details && typeof result.details === 'string' && result.details.includes('404')) {
-          console.error('[TEST] ❌ 404 Error detected - Calendar API likely not enabled or in wrong project');
-          const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'Unknown';
+          console.error('[TEST] ❌ 404 Error detected - Calendar API likely not enabled');
           setConnectionError({
-            title: 'Project Mismatch Detected',
-            message: `The Calendar API returned a 404 error. This usually means the API is enabled in a DIFFERENT project than your OAuth credentials.\n\nYour Client ID is: ${clientId}\n\nPlease search for this Client ID in the Google Cloud Console to find the correct project, then enable the Calendar API there.`,
+            title: 'Calendar API Not Found',
+            message: `The Calendar API returned a 404 error. This usually means:\n\n1. Calendar API is NOT enabled in your Google Cloud project\n2. Your token may not have the calendar scope\n3. There may be a billing/quota issue\n\nPlease check:\n- Enable Calendar API: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com\n- Verify your token has calendar scope (try disconnecting and reconnecting)\n- Check billing status: https://console.cloud.google.com/billing`,
             link: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'
           });
         } else if (result.message && result.message.includes('Token mismatch')) {

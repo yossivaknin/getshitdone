@@ -20,6 +20,38 @@ export interface CalendarConfig {
 }
 
 /**
+ * Get Google Cloud Project ID from environment variables or extract from Client ID
+ * Client ID format: PROJECT_NUMBER-xxx.apps.googleusercontent.com
+ * 
+ * This function automatically extracts the project number from the Client ID,
+ * so you don't need to set GOOGLE_PROJECT_ID separately.
+ */
+export function getGoogleProjectId(): string | null {
+  // First, try explicit environment variables
+  if (process.env.GOOGLE_PROJECT_ID) {
+    return process.env.GOOGLE_PROJECT_ID;
+  }
+  if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    return process.env.GOOGLE_CLOUD_PROJECT_ID;
+  }
+  
+  // If not set, try to extract from Client ID
+  // Client ID format: PROJECT_NUMBER-xxx.apps.googleusercontent.com
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  if (clientId) {
+    const match = clientId.match(/^(\d+)-/);
+    if (match && match[1]) {
+      console.log('[CALENDAR] Extracted project ID from Client ID:', match[1]);
+      return match[1];
+    }
+  }
+  
+  // If we can't determine it, return null (caller should handle this)
+  console.warn('[CALENDAR] ⚠️ Could not determine Google Project ID. Please set GOOGLE_PROJECT_ID environment variable.');
+  return null;
+}
+
+/**
  * Query Google Calendar for busy slots between two dates
  */
 export async function getBusySlots(
@@ -78,8 +110,9 @@ export async function getBusySlots(
     console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
-    // Get Google Cloud project ID and API key from environment
-    const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+    // Get Google Cloud project ID and API key from environment (optional)
+    // Google can infer the project from the OAuth token, so this is only needed for explicit billing/quota attribution
+    const googleProjectId = getGoogleProjectId();
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
     // Build URL with API key if available (helps with project identification)
@@ -88,15 +121,25 @@ export async function getBusySlots(
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
     }
     
+    // Build headers - include X-Goog-User-Project only if we can determine it
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${config.accessToken}`,
+      'Content-Type': 'application/json',
+    };
+    
+    // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+    if (googleProjectId) {
+      headers['X-Goog-User-Project'] = googleProjectId;
+      console.log('[CALENDAR] Using project ID:', googleProjectId);
+    } else {
+      console.log('[CALENDAR] No project ID set - Google will infer from OAuth token');
+    }
+    
     const response = await fetch(
       apiUrl,
       {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.accessToken}`,
-          'Content-Type': 'application/json',
-          'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
-        },
+        headers,
         body: JSON.stringify(requestBody),
       }
     );
@@ -172,15 +215,15 @@ Try:
           
           throw new Error(`Google Calendar API returned 404 HTML page. This usually means:
 1. The Calendar API is NOT enabled in your Google Cloud project
-2. OR you enabled it in a DIFFERENT project than your OAuth credentials
-3. OR there's a billing/quota issue
+2. Your token may not have the calendar scope (try reconnecting)
+3. There's a billing/quota issue
 
 Please verify:
-- Calendar API is enabled in the SAME project as your OAuth Client ID
-- Go to: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
-- Check which project your OAuth Client ID is in: https://console.cloud.google.com/apis/credentials${clientIdInfo}`);
+- Enable Calendar API: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
+- Verify your token has calendar scope (disconnect and reconnect in Settings)
+- Check billing: https://console.cloud.google.com/billing${clientIdInfo}`);
         } else {
-          throw new Error(`Google Calendar API endpoint not found (404). This might mean the API is enabled in a different project than your OAuth credentials. Please verify both are in the same Google Cloud project.`);
+          throw new Error(`Google Calendar API endpoint not found (404). The Calendar API may not be enabled in your Google Cloud project, or there may be a billing/quota issue. Please check: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com`);
         }
       } else if (response.status === 403) {
         throw new Error(`Google Calendar API access denied (403). Possible causes:
@@ -515,8 +558,8 @@ export async function createCalendarEvent(
     console.log('[EVENT] Request body:', JSON.stringify(eventData, null, 2));
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
-    // Get Google Cloud project ID and API key from environment
-    const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+    // Get Google Cloud project ID and API key from environment (optional)
+    const googleProjectId = getGoogleProjectId();
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
     // Build URL with API key if available (helps with project identification)
@@ -525,15 +568,22 @@ export async function createCalendarEvent(
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
     }
     
+    // Build headers - include X-Goog-User-Project only if we can determine it
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${config.accessToken}`,
+      'Content-Type': 'application/json',
+    };
+    
+    // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+    if (googleProjectId) {
+      headers['X-Goog-User-Project'] = googleProjectId;
+    }
+    
     const response = await fetch(
       apiUrl,
       {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.accessToken}`,
-          'Content-Type': 'application/json',
-          'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
-        },
+        headers,
         body: JSON.stringify(eventData),
       }
     );
@@ -579,8 +629,8 @@ export async function createCalendarEvent(
     
     // Verify the event was actually created by fetching it back
     try {
-      // Get Google Cloud project ID and API key from environment
-      const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619';
+      // Get Google Cloud project ID and API key from environment (optional)
+      const googleProjectId = getGoogleProjectId();
       const googleApiKey = process.env.GOOGLE_API_KEY;
       
       // Build URL with API key if available
@@ -589,13 +639,20 @@ export async function createCalendarEvent(
         verifyUrl += `?key=${encodeURIComponent(googleApiKey)}`;
       }
       
+      // Build headers - include X-Goog-User-Project only if we can determine it
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${config.accessToken}`,
+      };
+      
+      // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+      if (googleProjectId) {
+        headers['X-Goog-User-Project'] = googleProjectId;
+      }
+      
       const verifyResponse = await fetch(
         verifyUrl,
         {
-          headers: {
-            'Authorization': `Bearer ${config.accessToken}`,
-            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
-          },
+          headers,
         }
       );
       

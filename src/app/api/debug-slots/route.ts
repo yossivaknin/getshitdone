@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
     const busySlots = await getBusySlots(config, dayStart, dayEnd)
     
     // Also fetch [Focus] events
-    // Get Google Cloud project ID and API key from environment
-    const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619'
+    // Get Google Cloud project ID and API key from environment (optional)
+    const { getGoogleProjectId } = await import('@/lib/calendar')
+    const googleProjectId = getGoogleProjectId()
     const googleApiKey = process.env.GOOGLE_API_KEY
     
     let focusEventSlots: any[] = []
@@ -63,13 +64,20 @@ export async function GET(request: NextRequest) {
         eventsUrl += `&key=${encodeURIComponent(googleApiKey)}`
       }
       
+      // Build headers - include X-Goog-User-Project only if we can determine it
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${accessToken}`,
+      };
+      
+      // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+      if (googleProjectId) {
+        headers['X-Goog-User-Project'] = googleProjectId;
+      }
+      
       const eventsResponse = await fetch(
         eventsUrl,
         {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
-          },
+          headers,
         }
       )
       
@@ -92,7 +100,14 @@ export async function GET(request: NextRequest) {
     }
     
     // Merge busy slots
-    const allBusySlots = busySlots.map(slot => ({
+    const allBusySlots: Array<{
+      start: string;
+      end: string;
+      startTime: number;
+      endTime: number;
+      source: string;
+      summary?: string;
+    }> = busySlots.map(slot => ({
       start: slot.start.toISOString(),
       end: slot.end.toISOString(),
       startTime: slot.start.getTime(),

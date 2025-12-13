@@ -540,8 +540,9 @@ export async function scheduleTask(
       const timeMin = now.toISOString()
       const timeMax = dueDate.toISOString()
       
-      // Get Google Cloud project ID and API key from environment
-      const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || 'fast-asset-287619'
+      // Get Google Cloud project ID and API key from environment (optional)
+      const { getGoogleProjectId } = await import('@/lib/calendar')
+      const googleProjectId = getGoogleProjectId()
       const googleApiKey = process.env.GOOGLE_API_KEY
       
       // Build URL with API key if available (helps with project identification)
@@ -556,14 +557,21 @@ export async function scheduleTask(
         eventsUrl += `&key=${encodeURIComponent(googleApiKey)}`
       }
       
+      // Build headers - include X-Goog-User-Project only if we can determine it
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${validToken}`,
+      };
+      
+      // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+      if (googleProjectId) {
+        headers['X-Goog-User-Project'] = googleProjectId;
+      }
+      
       // Fetch all events with "[Focus]" in the title from Google Calendar
       const eventsResponse = await fetch(
         eventsUrl,
         {
-          headers: {
-            'Authorization': `Bearer ${validToken}`,
-            'X-Goog-User-Project': googleProjectId, // Explicitly specify project for billing/quota
-          },
+          headers,
         }
       )
       
