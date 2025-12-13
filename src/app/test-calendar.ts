@@ -59,27 +59,23 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         };
       }
 
-      // Verify token audience (Client ID) matches current configuration
-      // This prevents using a stale token from a different project
-      // Use the passed expectedClientId or fall back to env var
+      // Log token audience (Client ID) for debugging
+      // Note: We don't require it to match the configured Client ID - if the token works, that's what matters
       const configuredClientId = expectedClientId || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
-      console.log('[TEST] Validating token audience:', {
+      console.log('[TEST] Token audience info:', {
         tokenAudience: tokenInfo.audience,
         configuredClientId: configuredClientId,
         source: expectedClientId ? 'frontend' : 'env'
       });
 
+      // Only log a warning if they differ - don't block the test
       if (configuredClientId && tokenInfo.audience && tokenInfo.audience !== configuredClientId) {
-        console.error('[TEST] ❌ Token audience mismatch!', {
+        console.warn('[TEST] ⚠️ Token audience differs from configured Client ID (this is usually fine if the token works):', {
           tokenAudience: tokenInfo.audience,
           configuredClientId: configuredClientId
         });
-        return {
-          success: false,
-          message: 'Token mismatch: The stored token belongs to a different Google Cloud Project. Please disconnect and reconnect.',
-          details: `Token Client ID: ${tokenInfo.audience}\nConfigured Client ID: ${configuredClientId}`
-        };
+        // Don't return error - let the API test proceed to see if the token actually works
       }
     }
 

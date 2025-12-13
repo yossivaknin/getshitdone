@@ -239,14 +239,8 @@ export default function SettingsPage() {
             message: `The Calendar API returned a 404 error. This usually means:\n\n1. Calendar API is NOT enabled in your Google Cloud project\n2. Your token may not have the calendar scope\n3. There may be a billing/quota issue\n\nPlease check:\n- Enable Calendar API: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com\n- Verify your token has calendar scope (try disconnecting and reconnecting)\n- Check billing status: https://console.cloud.google.com/billing`,
             link: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'
           });
-        } else if (result.message && result.message.includes('Token mismatch')) {
-          console.error('[TEST] ❌ Token mismatch detected');
-          setConnectionError({
-            title: 'Configuration Changed',
-            message: 'Your Google Calendar configuration has changed. The stored token belongs to a different project. Please disconnect and reconnect to fix this.',
-          });
-          // Optional: Automatically disconnect?
-          // handleDisconnect(); 
+        // Note: We no longer check for "Token mismatch" since the token's Client ID doesn't need to match
+        // the configured Client ID - if the token works, that's what matters
         } else {
           setConnectionError({
             title: 'Connection Test Failed',
