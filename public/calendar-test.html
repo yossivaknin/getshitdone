@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Calendar API Test - usesitrep2</title>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #authorize_button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+        }
+        #authorize_button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #signout_button {
+            background-color: #db4437;
+            color: white;
+            border: none;
+        }
+        #content {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Google Calendar API Test</h1>
+    <p><strong>Project:</strong> usesitrep2</p>
+    <p>This page tests the Google Calendar API connection to verify the setup is correct.</p>
+    
+    <button id="authorize_button" onclick="handleAuthClick()">Authorize</button>
+    <button id="signout_button" onclick="handleSignoutClick()" style="visibility: hidden;">Sign Out</button>
+    
+    <div id="content">
+        <h2>Status</h2>
+        <p id="status">Not connected</p>
+        
+        <h2>Test Results</h2>
+        <div id="results"></div>
+    </div>
+    <script type="text/javascript">
+        /* 
+         * REPLACE THIS WITH YOUR ACTUAL CLIENT ID FROM THE GOOGLE CLOUD CONSOLE
+         * The Client ID we just created is: 284257627046-o7cdf4srcpcb9t956ssr72enjrdb27g0.apps.googleusercontent.com
+         */
+        const CLIENT_ID = '284257627046-o7cdf4srcpcb9t956ssr72enjrdb27go.apps.googleusercontent.com';
+        const API_KEY = 'YOUR_API_KEY_IF_YOU_HAVE_ONE'; // Optional - can leave as is
+        
+        // Discovery doc URL for APIs used
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+        
+        // Authorization scopes required
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        /**
+         * Callback after api.js is loaded.
+         */
+        function gapiLoaded() {
+            console.log('Google API script loaded');
+            try {
+                gapi.load('client', initializeGapiClient);
+            } catch (error) {
+                console.error('Error loading gapi client:', error);
+                document.getElementById('status').innerHTML = '<span class="error">Error loading Google API: ' + error.message + '</span>';
+            }
+        }
+        /**
+         * Callback after the API client is loaded. Loads the discovery doc.
+         */
+        async function initializeGapiClient() {
+            try {
+                console.log('Initializing GAPI client...');
+                await gapi.client.init({
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                console.log('GAPI client initialized');
+                maybeEnableButtons();
+            } catch (error) {
+                console.error('Error initializing GAPI client:', error);
+                document.getElementById('status').innerHTML = '<span class="error">Error initializing Google API client: ' + error.message + '</span>';
+            }
+        }
+        /**
+         * Callback after Google Identity Services are loaded.
+         */
+        function gisLoaded() {
+            try {
+                console.log('Google Identity Services loaded');
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: '', // defined later
+                });
+                gisInited = true;
+                console.log('Token client initialized');
+                maybeEnableButtons();
+            } catch (error) {
+                console.error('Error initializing Google Identity Services:', error);
+                document.getElementById('status').innerHTML = '<span class="error">Error initializing Google Identity Services: ' + error.message + '</span>';
+            }
+        }
+        /**
+         * Enables user interaction after all libraries are loaded.
+         */
+        function maybeEnableButtons() {
+            const button = document.getElementById('authorize_button');
+            if (gapiInited && gisInited) {
+                button.disabled = false;
+                button.style.visibility = 'visible';
+                console.log('Buttons enabled - ready to authorize');
+            } else {
+                button.disabled = true;
+                console.log('Waiting for libraries to load... gapiInited:', gapiInited, 'gisInited:', gisInited);
+            }
+        }
+        /**
+         *  Sign in the user upon button click.
+         */
+        function handleAuthClick() {
+            console.log('Authorize button clicked');
+            
+            if (!gapiInited || !gisInited) {
+                document.getElementById('status').innerHTML = '<span class="error">Please wait for libraries to load...</span>';
+                return;
+            }
+            
+            if (!tokenClient) {
+                document.getElementById('status').innerHTML = '<span class="error">Token client not initialized. Please refresh the page.</span>';
+                return;
+            }
+            
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    console.error('Authorization error:', resp.error);
+                    document.getElementById('status').innerHTML = '<span class="error">Authorization failed: ' + resp.error + '</span>';
+                    throw (resp);
+                }
+                console.log('Authorization successful');
+                document.getElementById('status').innerHTML = '<span class="success">✓ Connected successfully!</span>';
+                document.getElementById('signout_button').style.visibility = 'visible';
+                document.getElementById('authorize_button').innerText = 'Refresh';
+                await listUpcomingEvents();
+            };
+            
+            try {
+                if (gapi.client.getToken() === null) {
+                    // Prompt the user to select a Google Account and ask for consent
+                    console.log('Requesting access token with consent prompt');
+                    tokenClient.requestAccessToken({prompt: 'consent'});
+                } else {
+                    // Skip display of account chooser and consent dialog for an existing session.
+                    console.log('Requesting access token without prompt');
+                    tokenClient.requestAccessToken({prompt: ''});
+                }
+            } catch (error) {
+                console.error('Error requesting access token:', error);
+                document.getElementById('status').innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+        /**
+         *  Sign out the user upon button click.
+         */
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('status').innerHTML = 'Not connected';
+                document.getElementById('results').innerHTML = '';
+                document.getElementById('authorize_button').innerText = 'Authorize';
+                document.getElementById('signout_button').style.visibility = 'hidden';
+            }
+        }
+        /**
+         * Print the summary and start datetime/date of the next 10 events in
+         * the authorized user's calendar. If no events are found an
+         * appropriate message is printed.
+         */
+        async function listUpcomingEvents() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Loading calendar events...</p>';
+            
+            try {
+                const request = {
+                    'calendarId': 'primary',
+                    'timeMin': (new Date()).toISOString(),
+                    'showDeleted': false,
+                    'singleEvents': true,
+                    'maxResults': 10,
+                    'orderBy': 'startTime',
+                };
+                
+                const response = await gapi.client.calendar.events.list(request);
+                
+                resultsDiv.innerHTML = '<h3 class="success">✓ Calendar API Working!</h3>';
+                resultsDiv.innerHTML += '<p><strong>Successfully retrieved events from Google Calendar</strong></p>';
+                
+                const events = response.result.items;
+                if (!events || events.length == 0) {
+                    resultsDiv.innerHTML += '<p>No upcoming events found.</p>';
+                    return;
+                }
+                
+                // Output the response details
+                resultsDiv.innerHTML += '<p><strong>Found ' + events.length + ' upcoming events:</strong></p>';
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(events, null, 2) + '</pre>';
+                
+            } catch (err) {
+                resultsDiv.innerHTML = '<h3 class="error">✗ Error</h3>';
+                resultsDiv.innerHTML += '<p class="error">Failed to retrieve calendar events:</p>';
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(err, null, 2) + '</pre>';
+                
+                // Provide debugging information
+                resultsDiv.innerHTML += '<h3>Debugging Information:</h3>';
+                resultsDiv.innerHTML += '<p><strong>Error Message:</strong> ' + err.message + '</p>';
+                if (err.result && err.result.error) {
+                    resultsDiv.innerHTML += '<p><strong>Error Details:</strong></p>';
+                    resultsDiv.innerHTML += '<pre>' + JSON.stringify(err.result.error, null, 2) + '</pre>';
+                }
+            }
+        }
+    </script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()" onerror="console.error('Failed to load Google API script')"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()" onerror="console.error('Failed to load Google Identity Services script')"></script>
+    
+    <script>
+        // Initialize button state
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded');
+            const button = document.getElementById('authorize_button');
+            button.disabled = true;
+            button.style.visibility = 'visible';
+            document.getElementById('status').innerHTML = 'Loading Google libraries...';
+        });
+    </script>
+</body>
+</html>
+
+

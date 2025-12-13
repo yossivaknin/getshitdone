@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const message = searchParams?.get('message');
   const [isSignup, setIsSignup] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
+  const [isPending, startTransition] = useTransition();
 
   // Blinking cursor effect
   useEffect(() => {
@@ -148,16 +149,26 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <form action={loginWithGoogle}>
-              <Button 
-                type="submit"
-                variant="outline"
-                className="w-full border-2 border-slate-300 bg-white text-slate-900 rounded-sm font-bold tracking-widest uppercase hover:bg-slate-50 font-mono text-xs py-3 flex items-center justify-center gap-2"
-              >
-                <Chrome className="w-4 h-4" />
-                CONTINUE WITH GOOGLE
-              </Button>
-            </form>
+            <Button 
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    console.log('Initiating Google login...');
+                    await loginWithGoogle();
+                  } catch (error: any) {
+                    console.error('Google login error:', error);
+                    // Error will be shown via redirect message
+                  }
+                });
+              }}
+              className="w-full border-2 border-slate-300 bg-white text-slate-900 rounded-sm font-bold tracking-widest uppercase hover:bg-slate-50 font-mono text-xs py-3 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Chrome className="w-4 h-4" />
+              {isPending ? 'CONNECTING...' : 'CONTINUE WITH GOOGLE'}
+            </Button>
           </div>
         </div>
       </div>
