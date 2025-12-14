@@ -213,11 +213,18 @@ export async function createTask(taskData: {
 
   // Handle tags - use separate tags table
   if (task) {
-    // First, delete existing tags for this task
-    await supabase
+    console.log('[CREATE TASK] Tags received:', taskData.tags)
+    console.log('[CREATE TASK] Task ID:', task.id)
+    
+    // First, delete existing tags for this task (in case of re-creation)
+    const { error: deleteError } = await supabase
       .from('tags')
       .delete()
       .eq('task_id', task.id)
+
+    if (deleteError) {
+      console.warn('[CREATE TASK] Error deleting existing tags (may not exist):', deleteError)
+    }
 
     // Then insert new tags if provided
     if (taskData.tags && taskData.tags.length > 0) {
@@ -227,14 +234,24 @@ export async function createTask(taskData: {
         color: null
       }))
 
-      const { error: tagsError } = await supabase
+      console.log('[CREATE TASK] Inserting tags:', tagInserts)
+
+      const { data: insertedTags, error: tagsError } = await supabase
         .from('tags')
         .insert(tagInserts)
+        .select()
 
       if (tagsError) {
-        console.error('Error creating tags:', tagsError)
-        // Don't fail the whole operation if tags fail
+        console.error('[CREATE TASK] Error creating tags:', tagsError)
+        console.error('[CREATE TASK] Tag inserts attempted:', tagInserts)
+        console.error('[CREATE TASK] Task ID:', task.id)
+        // Return error so user knows tags weren't saved
+        return { error: `Task created but tags failed: ${tagsError.message}`, task }
+      } else {
+        console.log('[CREATE TASK] Tags created successfully:', insertedTags)
       }
+    } else {
+      console.log('[CREATE TASK] No tags to insert')
     }
   }
 
@@ -314,11 +331,21 @@ export async function updateTask(taskId: string, updates: {
 
   // Update tags if provided
   if (updates.tags !== undefined && task) {
+    console.log('[UPDATE TASK] Tags received:', updates.tags)
+    console.log('[UPDATE TASK] Task ID:', taskId)
+    
     // Delete existing tags
-    await supabase
+    const { error: deleteError } = await supabase
       .from('tags')
       .delete()
       .eq('task_id', taskId)
+
+    if (deleteError) {
+      console.error('[UPDATE TASK] Error deleting existing tags:', deleteError)
+      console.error('[UPDATE TASK] Task ID:', taskId)
+    } else {
+      console.log('[UPDATE TASK] Existing tags deleted')
+    }
 
     // Insert new tags
     if (updates.tags.length > 0) {
@@ -328,9 +355,23 @@ export async function updateTask(taskId: string, updates: {
         color: null
       }))
 
-      await supabase
+      console.log('[UPDATE TASK] Inserting tags:', tagInserts)
+
+      const { data: insertedTags, error: tagsError } = await supabase
         .from('tags')
         .insert(tagInserts)
+        .select()
+
+      if (tagsError) {
+        console.error('[UPDATE TASK] Error updating tags:', tagsError)
+        console.error('[UPDATE TASK] Tag inserts attempted:', tagInserts)
+        console.error('[UPDATE TASK] Task ID:', taskId)
+        return { error: `Task updated but tags failed: ${tagsError.message}`, task }
+      } else {
+        console.log('[UPDATE TASK] Tags updated successfully:', insertedTags)
+      }
+    } else {
+      console.log('[UPDATE TASK] No tags to insert (all tags removed)')
     }
   }
 
