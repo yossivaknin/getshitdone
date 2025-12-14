@@ -88,7 +88,17 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       setTitle(task.title);
       setDescription(task.description || '');
       setDuration(task.duration?.toString() || '30'); // Default to 30 minutes
-      setSelectedTags(task.tags?.map(t => t.name) || []);
+      
+      // Always update selectedTags from task.tags to reflect latest state
+      // Handle both object format {name, color} and string format
+      const taskTagNames = task.tags?.map((t: any) => typeof t === 'string' ? t : t.name) || [];
+      console.log('[EditTaskDialog] Updating selectedTags from task:', {
+        taskId: task.id,
+        taskTags: task.tags,
+        tagNames: taskTagNames,
+        currentSelectedTags: selectedTags
+      });
+      setSelectedTags(taskTagNames);
       
       // Load chunking settings from task
       if (task.chunkCount && task.chunkCount > 1 && task.chunkDuration) {
@@ -191,8 +201,13 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       chunkDuration: manualChunking && chunkCount > 1 ? chunkDuration : undefined,
     };
 
+    // Update the task
     onUpdateTask(updatedTask);
+    
+    // Close dialog - it will reopen with updated task if needed
     onOpenChange(false);
+    
+    // Show success message
     toast.success('Task updated successfully');
   };
 
