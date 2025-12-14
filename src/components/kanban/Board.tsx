@@ -42,15 +42,41 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             return;
         }
         
-        // Only sync if tasks have actually changed (different IDs or count)
+        // Check if tasks have actually changed (IDs, count, or content)
         setTasks((currentTasks) => {
             const currentTaskIds = currentTasks.map((t: any) => t.id).sort().join(',');
             const newTaskIds = initialTasks.map((t: any) => t.id).sort().join(',');
             
-            // Only update if IDs or count actually changed
+            // Update if IDs or count changed
             if (currentTaskIds !== newTaskIds || initialTasks.length !== currentTasks.length) {
                 return initialTasks;
             }
+            
+            // Also check if task content (like tags) has changed
+            // Compare each task's data to detect changes in tags, title, etc.
+            const hasContentChanged = currentTasks.some((currentTask: any) => {
+                const newTask = initialTasks.find((t: any) => t.id === currentTask.id);
+                if (!newTask) return true; // Task was added/removed
+                
+                // Compare tags (most common change)
+                const currentTagNames = (currentTask.tags || []).map((t: any) => typeof t === 'string' ? t : t.name).sort().join(',');
+                const newTagNames = (newTask.tags || []).map((t: any) => typeof t === 'string' ? t : t.name).sort().join(',');
+                
+                // Compare other fields that might change
+                const titleChanged = currentTask.title !== newTask.title;
+                const descriptionChanged = currentTask.description !== newTask.description;
+                const statusChanged = currentTask.status !== newTask.status;
+                const tagsChanged = currentTagNames !== newTagNames;
+                
+                return titleChanged || descriptionChanged || statusChanged || tagsChanged;
+            });
+            
+            // Update if content changed
+            if (hasContentChanged) {
+                console.log('[Board] Task content changed, updating tasks array');
+                return initialTasks;
+            }
+            
             return currentTasks;
         });
     }, [initialTasks]);
