@@ -117,31 +117,28 @@ export async function getBusySlots(
     console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
-    // Get Google Cloud project ID - prefer the one from token, fall back to env vars
-    // CRITICAL: Use the project ID from the token's audience, not from env vars
-    // This ensures we use the correct project that matches the OAuth token
-    const googleProjectId = tokenProjectId || getGoogleProjectId();
+    // Don't add X-Goog-User-Project header - let Google infer the project from the OAuth token
+    // The Calendar list API works without this header, so FreeBusy should too
+    // Adding the wrong project ID causes 404 errors
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
-    // Build URL with API key if available (helps with project identification)
+    // Build URL with API key if available (optional - helps with project identification)
     let apiUrl = `https://www.googleapis.com/calendar/v3/freebusy`;
     if (googleApiKey) {
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
     }
     
-    // Build headers - include X-Goog-User-Project only if we can determine it
+    // Build headers - NO X-Goog-User-Project header
+    // Google will automatically infer the project from the OAuth token's audience
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.accessToken}`,
       'Content-Type': 'application/json',
     };
     
-    // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
-    // IMPORTANT: Use the project ID from the token, not from env vars, to avoid mismatches
-    if (googleProjectId) {
-      headers['X-Goog-User-Project'] = googleProjectId;
-      console.log('[CALENDAR] Using project ID:', googleProjectId, tokenProjectId ? '(from token)' : '(from env)');
+    if (tokenProjectId) {
+      console.log('[CALENDAR] Token belongs to project:', tokenProjectId, '- Google will infer this from token (no header needed)');
     } else {
-      console.log('[CALENDAR] No project ID set - Google will infer from OAuth token');
+      console.log('[CALENDAR] No project ID extracted - Google will infer from OAuth token');
     }
     
     const response = await fetch(
@@ -567,50 +564,22 @@ export async function createCalendarEvent(
     console.log('[EVENT] Request body:', JSON.stringify(eventData, null, 2));
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
-    // Extract project ID from token's audience (Client ID) to ensure we use the correct project
-    // Client ID format: PROJECT_NUMBER-xxx.apps.googleusercontent.com
-    let tokenProjectId: string | null = null;
-    try {
-      const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
-      if (tokenInfoResponse.ok) {
-        const tokenInfo = await tokenInfoResponse.json();
-        if (tokenInfo.audience) {
-          const match = tokenInfo.audience.match(/^(\d+)-/);
-          if (match && match[1]) {
-            tokenProjectId = match[1];
-            console.log('[EVENT] ✅ Extracted project ID from token:', tokenProjectId);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[EVENT] ⚠️ Could not extract project ID from token:', error);
-    }
-    
-    // Get Google Cloud project ID - prefer the one from token, fall back to env vars
-    // CRITICAL: Use the project ID from the token's audience, not from env vars
-    const googleProjectId = tokenProjectId || getGoogleProjectId();
+    // Don't add X-Goog-User-Project header - let Google infer the project from the OAuth token
+    // This avoids project mismatch issues
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
-    // Build URL with API key if available (helps with project identification)
+    // Build URL with API key if available (optional)
     let apiUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
     if (googleApiKey) {
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
     }
     
-    // Build headers - include X-Goog-User-Project only if we can determine it
+    // Build headers - NO X-Goog-User-Project header
+    // Google will automatically infer the project from the OAuth token's audience
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.accessToken}`,
       'Content-Type': 'application/json',
     };
-    
-    // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
-    // IMPORTANT: Use the project ID from the token, not from env vars, to avoid mismatches
-    if (googleProjectId) {
-      headers['X-Goog-User-Project'] = googleProjectId;
-      console.log('[EVENT] Using project ID:', googleProjectId, tokenProjectId ? '(from token)' : '(from env)');
-    } else {
-      console.log('[EVENT] No project ID set - Google will infer from OAuth token');
-    }
     
     const response = await fetch(
       apiUrl,
