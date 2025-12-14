@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, Clock, User, CalendarCheck, GripVertical, Trash2 } from 'lucide-react'
+import { Calendar, Clock, User, CalendarCheck, GripVertical, Trash2, ChevronRight, CheckCircle, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
 import { DeleteTaskDialog } from '@/components/delete-task-dialog'
@@ -23,9 +23,11 @@ interface TaskCardProps {
     onEdit?: (task: any) => void
     onDelete?: (taskId: string) => void
     allTags?: string[] // All existing tags from all tasks
+    columnId?: string // The column this task is in (for quick actions)
+    onMoveTask?: (task: any) => void // Handler for moving tasks between columns
 }
 
-export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps) {
+export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMoveTask }: TaskCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isScheduling, setIsScheduling] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -101,7 +103,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
         // Don't open edit if clicking on schedule button or delete button
         if ((e.target as HTMLElement).closest('.schedule-button') || 
             (e.target as HTMLElement).closest('.delete-button') ||
-            (e.target as HTMLElement).closest('.drag-handle')) {
+            (e.target as HTMLElement).closest('.drag-handle') ||
+            (e.target as HTMLElement).closest('.quick-action-button')) {
             return;
         }
         
@@ -238,6 +241,99 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
         }
     };
 
+    // Quick action handler for mobile
+    const handleQuickAction = async (e: React.MouseEvent | React.TouchEvent) => {
+        e.stopPropagation(); // Prevent opening edit dialog
+        
+        if (!onMoveTask || !columnId) return;
+
+        let newStatus: string;
+        let newListId: string;
+        
+        // Map actions based on current column
+        if (columnId === 'todo') {
+            // QUEUE → ACTIVE (Play button)
+            newStatus = 'in_progress';
+            newListId = 'in-progress';
+        } else if (columnId === 'in-progress') {
+            // ACTIVE → SHIPPED (Check button)
+            newStatus = 'done';
+            newListId = 'done';
+        } else if (columnId === 'done') {
+            // SHIPPED → ACTIVE (Rewind button)
+            newStatus = 'in_progress';
+            newListId = 'in-progress';
+        } else {
+            return; // Unknown column
+        }
+
+        // Update task status
+        try {
+            const { updateTaskStatus } = await import('@/app/actions');
+            const result = await updateTaskStatus(task.id, newStatus);
+            
+            if (result.error) {
+                toast.error(result.error);
+            } else {
+                // Update local task state
+                onMoveTask({ ...task, status: newStatus, list_id: newListId });
+                toast.success('Task moved');
+            }
+        } catch (error) {
+            console.error('Quick action error:', error);
+            toast.error('Failed to move task');
+        }
+    };
+
+    // Determine which quick action button to show (mobile only)
+    const getQuickActionButton = () => {
+        if (!columnId || typeof window === 'undefined') return null;
+        
+        // Only show on mobile (below md breakpoint)
+        const isMobile = window.innerWidth < 768;
+        if (!isMobile) return null;
+
+        if (columnId === 'todo') {
+            // QUEUE: Show Play button (ChevronRight)
+            return (
+                <button
+                    onClick={handleQuickAction}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95"
+                    title="Execute"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            );
+        } else if (columnId === 'in-progress') {
+            // ACTIVE: Show Check button (CheckCircle)
+            return (
+                <button
+                    onClick={handleQuickAction}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-md transition-all active:scale-95"
+                    title="Mission Complete"
+                >
+                    <CheckCircle className="w-5 h-5" />
+                </button>
+            );
+        } else if (columnId === 'done') {
+            // SHIPPED: Show Rewind button (RotateCcw)
+            return (
+                <button
+                    onClick={handleQuickAction}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95"
+                    title="Move to Active"
+                >
+                    <RotateCcw className="w-5 h-5" />
+                </button>
+            );
+        }
+        
+        return null;
+    };
+
     return (
         <>
             <div 
@@ -275,7 +371,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                 )}
 
                 {/* Action buttons */}
-                <div className="flex justify-end items-start mb-2 sm:mb-3">
+                <div className="flex justify-end items-start mb-2 sm:mb-3 gap-2">
                     <div className="flex items-center gap-1">
                         {task.duration && !isDone && (
                             <button
@@ -290,6 +386,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                             </button>
                         )}
                     </div>
+                    {/* Quick Action Button (Mobile Only) */}
+                    {getQuickActionButton()}
             </div>
 
                 {/* Task Title */}

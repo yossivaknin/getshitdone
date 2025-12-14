@@ -37,6 +37,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const skipSyncRef = useRef(false);
     const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);
     const [createDialogListId, setCreateDialogListId] = useState<string>('todo'); // Default to first column
+    const [mobileSelectedTab, setMobileSelectedTab] = useState<string>('todo'); // Mobile tab selection
+    const [isMobile, setIsMobile] = useState(false); // Track if we're on mobile
     
     // Use external control if provided, otherwise use internal state
     const createDialogOpen = externalCreateDialogOpen !== undefined ? externalCreateDialogOpen : internalCreateDialogOpen;
@@ -122,23 +124,37 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         return listId; // 'todo' and 'done' are the same
     };
     
+    // Detect mobile breakpoint and disable DND on mobile
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 768); // md breakpoint
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Disable DND sensors on mobile, enable on desktop
     const sensors = useSensors(
-        // For mouse/pointer: require 8px movement (desktop behavior)
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-        // For touch: require 500ms long press before drag starts (mobile behavior)
-        useSensor(TouchSensor, {
-            activationConstraint: {
-                delay: 500, // 500ms long press
-                tolerance: 5, // Allow 5px movement during long press
-            },
-        }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
+        // Only enable sensors on desktop (md and above)
+        ...(isMobile ? [] : [
+            // For mouse/pointer: require 8px movement (desktop behavior)
+            useSensor(PointerSensor, {
+                activationConstraint: {
+                    distance: 8,
+                },
+            }),
+            // For touch: require 500ms long press before drag starts (mobile behavior)
+            useSensor(TouchSensor, {
+                activationConstraint: {
+                    delay: 500, // 500ms long press
+                    tolerance: 5, // Allow 5px movement during long press
+                },
+            }),
+            useSensor(KeyboardSensor, {
+                coordinateGetter: sortableKeyboardCoordinates,
+            })
+        ])
     );
     
     // Filter tasks by selected tag
@@ -600,30 +616,64 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     )}
                 </div>
 
-                {/* Columns - Stack vertically on mobile, horizontal on tablet+ */}
+                {/* Mobile Tab Bar - Only show on mobile (below md) */}
+                <div className="md:hidden px-3 sm:px-4 pt-2 pb-3 flex-shrink-0 border-b border-slate-200">
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                        {initialLists.map((list) => {
+                            const isActive = mobileSelectedTab === list.id;
+                            // Map list IDs to display names
+                            const displayName = list.id === 'todo' ? 'QUEUE' : 
+                                              list.id === 'in-progress' ? 'ACTIVE' : 
+                                              list.id === 'done' ? 'SHIPPED' : list.title.toUpperCase();
+                            
+                            return (
+                                <button
+                                    key={list.id}
+                                    onClick={() => setMobileSelectedTab(list.id)}
+                                    className={`flex-1 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all ${
+                                        isActive
+                                            ? 'bg-slate-900 text-white'
+                                            : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                >
+                                    {displayName}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Columns - Stack vertically on mobile (single tab), horizontal on tablet+ */}
                 <div className="flex flex-col md:flex-row flex-1 gap-4 md:gap-5 lg:gap-6 px-3 sm:px-4 md:px-5 lg:px-6 pb-4 sm:pb-6 overflow-y-auto md:overflow-x-auto md:overflow-y-hidden">
-                    {initialLists.map((list) => (
-                        <Column 
-                            key={list.id} 
-                            id={list.id} 
-                            title={list.title} 
-                            tasks={tasksByList[list.id] || []} 
-                            workspaceId={workspaceId}
-                            onCreateTask={handleCreateTask}
-                            onUpdateTask={handleUpdateTask}
-                            onDeleteTask={handleDeleteTask}
-                            allTags={allTags}
-                            createDialogOpen={createDialogOpen && createDialogListId === list.id}
-                            onCreateDialogOpenChange={(open) => {
-                                if (open) {
-                                    setCreateDialogListId(list.id);
-                                    setCreateDialogOpen(true);
-                                } else {
-                                    setCreateDialogOpen(false);
-                                }
-                            }}
-                        />
-                    ))}
+                    {initialLists.map((list) => {
+                        // On mobile, only show the selected tab's column
+                        const shouldShow = isMobile ? mobileSelectedTab === list.id : true;
+                        
+                        if (!shouldShow) return null;
+                        
+                        return (
+                            <Column 
+                                key={list.id} 
+                                id={list.id} 
+                                title={list.title} 
+                                tasks={tasksByList[list.id] || []} 
+                                workspaceId={workspaceId}
+                                onCreateTask={handleCreateTask}
+                                onUpdateTask={handleUpdateTask}
+                                onDeleteTask={handleDeleteTask}
+                                allTags={allTags}
+                                createDialogOpen={createDialogOpen && createDialogListId === list.id}
+                                onCreateDialogOpenChange={(open) => {
+                                    if (open) {
+                                        setCreateDialogListId(list.id);
+                                        setCreateDialogOpen(true);
+                                    } else {
+                                        setCreateDialogOpen(false);
+                                    }
+                                }}
+                            />
+                        );
+                    })}
                 </div>
             </div>
             <DragOverlay>

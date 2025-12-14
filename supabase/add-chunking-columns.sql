@@ -8,3 +8,5 @@ COMMENT ON COLUMN tasks.chunk_count IS 'Number of chunks to split the task into 
 COMMENT ON COLUMN tasks.chunk_duration IS 'Duration per chunk in minutes (for manual chunking)';
 
 
+
+

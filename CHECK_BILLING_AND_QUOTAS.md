@@ -107,3 +107,5 @@ Since your project is correctly configured, the 404 is likely due to:
 
 The test function will show you if it's a general API issue (Calendar List fails) or FreeBusy-specific (Calendar List works, FreeBusy fails).
 
+
+

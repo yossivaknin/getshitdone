@@ -118,3 +118,5 @@ Since your project is correctly configured, the HTML 404 almost certainly means:
 3. Should get 200 OK with JSON response
 4. Then "Test Connection" in Settings should work
 
+
+

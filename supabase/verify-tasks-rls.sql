@@ -27,3 +27,5 @@ WHERE tablename = 'tasks';
 SELECT auth.uid() as current_user_id;
 
 
+
+

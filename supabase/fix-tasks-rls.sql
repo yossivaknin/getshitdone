@@ -34,3 +34,5 @@ CREATE POLICY "Users can delete their own tasks."
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
 
+
+

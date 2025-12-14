@@ -132,3 +132,5 @@ Both should work, but the login OAuth now includes calendar permissions, so user
 - `src/app/settings/page.tsx` - Calendar connection OAuth (separate flow)
 - `src/app/api/auth/google/callback/route.ts` - Calendar OAuth callback
 
+
+

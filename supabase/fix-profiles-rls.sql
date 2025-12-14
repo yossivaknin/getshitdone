@@ -28,3 +28,5 @@ CREATE POLICY "Users can update own profile."
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 
+
+

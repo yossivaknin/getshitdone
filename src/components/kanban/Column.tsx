@@ -93,6 +93,8 @@ export function Column({ title, tasks, id, workspaceId, onCreateTask, onUpdateTa
                                 onEdit={onUpdateTask}
                                 onDelete={onDeleteTask}
                                 allTags={allTags}
+                                columnId={id}
+                                onMoveTask={onUpdateTask}
                             />
                         ))
                     )}

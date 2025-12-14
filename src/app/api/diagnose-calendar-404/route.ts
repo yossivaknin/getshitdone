@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     const googleProjectId = getGoogleProjectId()
     const googleApiKey = process.env.GOOGLE_API_KEY
     
-    let apiUrl = `https://www.googleapis.com/calendar/v3/freebusy`
+    let apiUrl = `https://www.googleapis.com/calendar/v3/freeBusy`
     if (googleApiKey) {
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`
     }

@@ -34,3 +34,5 @@ CREATE POLICY "Users can delete their own workspaces."
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
 
+
+
