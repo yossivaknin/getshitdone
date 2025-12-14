@@ -103,6 +103,13 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     };
     const [activeTask, setActiveTask] = useState<any>(null);
     
+    // Helper function to map UI column IDs to database status values
+    // UI uses 'in-progress' (hyphen), DB uses 'in_progress' (underscore)
+    const mapListIdToStatus = (listId: string): string => {
+        if (listId === 'in-progress') return 'in_progress';
+        return listId; // 'todo' and 'done' are the same
+    };
+    
     const sensors = useSensors(
         // For mouse/pointer: require 8px movement (desktop behavior)
         useSensor(PointerSensor, {
@@ -138,7 +145,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const handleCreateTask = async (newTask: any) => {
         try {
             // Map list_id to status for database
-            const status = newTask.list_id || 'todo';
+            const listId = newTask.list_id || 'todo';
+            const status = mapListIdToStatus(listId);
             
             const result = await createTask({
                 title: newTask.title,
@@ -179,7 +187,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const handleUpdateTask = async (updatedTask: any) => {
         try {
             // Map list_id to status for database
-            const status = updatedTask.list_id || updatedTask.status || 'todo';
+            const listId = updatedTask.list_id || updatedTask.status || 'todo';
+            const status = mapListIdToStatus(listId);
             
             const result = await updateTask(updatedTask.id, {
                 title: updatedTask.title,
@@ -322,13 +331,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
         console.log('[DRAG] Moving task from', oldListId, 'to', newListId);
 
-        // Map UI column IDs to database status values
-        // UI uses 'in-progress' (hyphen), DB uses 'in_progress' (underscore)
-        const mapListIdToStatus = (listId: string): string => {
-            if (listId === 'in-progress') return 'in_progress';
-            return listId; // 'todo' and 'done' are the same
-        };
-
+        // Map UI column ID to database status value
         const newStatus = mapListIdToStatus(newListId);
 
         // Check if we're moving to or from "done" column
