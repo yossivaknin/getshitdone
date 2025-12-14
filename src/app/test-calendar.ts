@@ -43,11 +43,16 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
       }
     } else {
       const tokenInfo = await tokenTest.json();
+      
+      // Extract project number from Client ID (format: PROJECT_NUMBER-xxx.apps.googleusercontent.com)
+      const projectNumber = tokenInfo.audience?.split('-')[0] || 'unknown';
+      
       console.log('[TEST] ✅ Token is valid:', {
         expires_in: tokenInfo.expires_in,
         scope: tokenInfo.scope,
         audience: tokenInfo.audience,
-        issued_to: tokenInfo.issued_to
+        issued_to: tokenInfo.issued_to,
+        projectNumber: projectNumber
       });
 
       // Verify calendar scope
@@ -58,6 +63,11 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
           details: `Token scope: ${tokenInfo.scope || 'none'}`
         };
       }
+      
+      // Log important info for debugging
+      console.log('[TEST] 🔍 IMPORTANT: Your OAuth token belongs to project:', projectNumber);
+      console.log('[TEST] 🔍 Make sure Calendar API is enabled in project:', projectNumber);
+      console.log('[TEST] 🔍 Check: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=' + projectNumber);
 
       // Log token audience (Client ID) for debugging
       // Note: We don't require it to match the configured Client ID - if the token works, that's what matters
@@ -82,6 +92,7 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
     // Test 2: Try a simple Calendar API call first (list calendars)
     console.log('[TEST] Step 2: Testing Calendar API access with simple call...');
     try {
+      // Test WITHOUT any project headers first - let Google infer from token
       const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', {
         headers: {
           'Authorization': `Bearer ${validToken}`,
@@ -91,7 +102,8 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
       console.log('[TEST] Calendar list API response:', {
         status: calendarListResponse.status,
         statusText: calendarListResponse.statusText,
-        ok: calendarListResponse.ok
+        ok: calendarListResponse.ok,
+        url: calendarListResponse.url
       });
 
       if (!calendarListResponse.ok) {
@@ -101,32 +113,75 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         console.error('[TEST] Calendar list API failed:', {
           status: calendarListResponse.status,
           statusText: calendarListResponse.statusText,
-          errorPreview: errorText.substring(0, 500),
+          errorPreview: errorText.substring(0, 1000),
           isHtml: isHtml,
-          responseHeaders: Object.fromEntries(calendarListResponse.headers.entries())
+          responseHeaders: Object.fromEntries(calendarListResponse.headers.entries()),
+          responseUrl: calendarListResponse.url
         });
 
         if (calendarListResponse.status === 404) {
+          // Extract project number from token
+          const projectNumber = tokenInfo.audience?.split('-')[0] || 'unknown';
+          
           // Check if it's an HTML 404 (API not accessible) vs JSON 404
           if (isHtml) {
+            // Extract more details from the HTML response
+            const htmlPreview = errorText.substring(0, 2000);
+            console.error('[TEST] Full HTML 404 response preview:', htmlPreview);
+            
             // Even with billing enabled, sometimes API needs to be refreshed
             return {
               success: false,
-              message: 'Calendar API returned 404 HTML page. Even though billing is enabled and project is correctly configured, try: 1) Disable and re-enable Calendar API, 2) Wait 10-15 minutes, 3) Check for organization policies or restrictions.',
-              details: `Status: ${calendarListResponse.status}. HTML 404 response received. This can happen even with correct configuration. Try:
-1. Disable Calendar API: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com
-2. Wait 30 seconds
-3. Re-enable it
-4. Wait 10-15 minutes for full propagation
-5. Check organization policies: https://console.cloud.google.com/iam-admin/orgpolicies
-6. Verify API is accessible: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/overview`
+              message: 'Calendar API returned 404 HTML page. This means Google cannot find the Calendar API endpoint.',
+              details: `Status: ${calendarListResponse.status}. HTML 404 response received.
+
+🔍 DIAGNOSTIC INFO:
+- Your OAuth Client ID: ${tokenInfo.audience}
+- Project Number (from Client ID): ${projectNumber}
+- Token has calendar scope: ✅ Yes
+
+This usually means:
+1. Calendar API is NOT enabled in project ${projectNumber}
+2. Calendar API is enabled in a DIFFERENT project than your OAuth token
+3. The API was disabled or needs to be re-enabled
+4. There's a billing/quota restriction
+
+ACTION REQUIRED:
+1. Go to: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=${projectNumber}
+2. Make sure you're viewing project: ${projectNumber} (check the project selector at the top)
+3. Verify Calendar API shows "ENABLED" (not just created)
+4. If it's enabled but still failing:
+   - Disable Calendar API
+   - Wait 30 seconds
+   - Re-enable it
+   - Wait 5-10 minutes for propagation
+5. Check billing: https://console.cloud.google.com/billing?project=${projectNumber}
+6. Check quotas: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas?project=${projectNumber}
+
+⚠️ IMPORTANT: Make sure you're checking project ${projectNumber}, not a different project!`
             };
           } else {
-            return {
-              success: false,
-              message: 'Calendar API returned 404. The API is not enabled in your Google Cloud project, or it\'s enabled in a different project than your OAuth credentials.',
-              details: `Status: ${calendarListResponse.status}. Error: ${errorText.substring(0, 200)}`
-            };
+            // JSON 404 - different issue
+            try {
+              const errorJson = JSON.parse(errorText);
+              return {
+                success: false,
+                message: 'Calendar API returned 404 JSON error.',
+                details: `Status: ${calendarListResponse.status}. Error: ${JSON.stringify(errorJson, null, 2)}
+
+Your token's project: ${projectNumber}
+Make sure Calendar API is enabled in project ${projectNumber}`
+              };
+            } catch {
+              return {
+                success: false,
+                message: 'Calendar API returned 404.',
+                details: `Status: ${calendarListResponse.status}. Error: ${errorText.substring(0, 200)}
+
+Your token's project: ${projectNumber}
+Make sure Calendar API is enabled in project ${projectNumber}`
+              };
+            }
           }
         }
       } else {
