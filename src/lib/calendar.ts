@@ -63,6 +63,7 @@ export async function getBusySlots(
   console.log('[CALENDAR] Time range:', timeMin.toISOString(), 'to', timeMax.toISOString());
   
   // First, verify token has calendar scope and get project info
+  let tokenProjectId: string | null = null;
   try {
     const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
     if (tokenInfoResponse.ok) {
@@ -82,10 +83,16 @@ export async function getBusySlots(
         throw new Error('Token does not have Google Calendar scope. Please reconnect Google Calendar in Settings and grant calendar permissions.');
       }
       
-      // Log the audience (Client ID) to help diagnose project mismatch
+      // Extract project ID from token's audience (Client ID)
+      // Client ID format: PROJECT_NUMBER-xxx.apps.googleusercontent.com
       if (tokenInfo.audience) {
         console.log('[CALENDAR] Token audience (Client ID):', tokenInfo.audience);
-        console.log('[CALENDAR] ⚠️ IMPORTANT: Make sure Calendar API is enabled in the SAME project as this Client ID!');
+        const match = tokenInfo.audience.match(/^(\d+)-/);
+        if (match && match[1]) {
+          tokenProjectId = match[1];
+          console.log('[CALENDAR] ✅ Extracted project ID from token:', tokenProjectId);
+          console.log('[CALENDAR] ⚠️ IMPORTANT: Make sure Calendar API is enabled in project:', tokenProjectId);
+        }
       }
     } else {
       const errorText = await tokenInfoResponse.text();
@@ -110,9 +117,10 @@ export async function getBusySlots(
     console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
-    // Get Google Cloud project ID and API key from environment (optional)
-    // Google can infer the project from the OAuth token, so this is only needed for explicit billing/quota attribution
-    const googleProjectId = getGoogleProjectId();
+    // Get Google Cloud project ID - prefer the one from token, fall back to env vars
+    // CRITICAL: Use the project ID from the token's audience, not from env vars
+    // This ensures we use the correct project that matches the OAuth token
+    const googleProjectId = tokenProjectId || getGoogleProjectId();
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
     // Build URL with API key if available (helps with project identification)
@@ -128,9 +136,10 @@ export async function getBusySlots(
     };
     
     // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+    // IMPORTANT: Use the project ID from the token, not from env vars, to avoid mismatches
     if (googleProjectId) {
       headers['X-Goog-User-Project'] = googleProjectId;
-      console.log('[CALENDAR] Using project ID:', googleProjectId);
+      console.log('[CALENDAR] Using project ID:', googleProjectId, tokenProjectId ? '(from token)' : '(from env)');
     } else {
       console.log('[CALENDAR] No project ID set - Google will infer from OAuth token');
     }
@@ -558,8 +567,28 @@ export async function createCalendarEvent(
     console.log('[EVENT] Request body:', JSON.stringify(eventData, null, 2));
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
-    // Get Google Cloud project ID and API key from environment (optional)
-    const googleProjectId = getGoogleProjectId();
+    // Extract project ID from token's audience (Client ID) to ensure we use the correct project
+    // Client ID format: PROJECT_NUMBER-xxx.apps.googleusercontent.com
+    let tokenProjectId: string | null = null;
+    try {
+      const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${config.accessToken}`);
+      if (tokenInfoResponse.ok) {
+        const tokenInfo = await tokenInfoResponse.json();
+        if (tokenInfo.audience) {
+          const match = tokenInfo.audience.match(/^(\d+)-/);
+          if (match && match[1]) {
+            tokenProjectId = match[1];
+            console.log('[EVENT] ✅ Extracted project ID from token:', tokenProjectId);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[EVENT] ⚠️ Could not extract project ID from token:', error);
+    }
+    
+    // Get Google Cloud project ID - prefer the one from token, fall back to env vars
+    // CRITICAL: Use the project ID from the token's audience, not from env vars
+    const googleProjectId = tokenProjectId || getGoogleProjectId();
     const googleApiKey = process.env.GOOGLE_API_KEY;
     
     // Build URL with API key if available (helps with project identification)
@@ -575,8 +604,12 @@ export async function createCalendarEvent(
     };
     
     // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
+    // IMPORTANT: Use the project ID from the token, not from env vars, to avoid mismatches
     if (googleProjectId) {
       headers['X-Goog-User-Project'] = googleProjectId;
+      console.log('[EVENT] Using project ID:', googleProjectId, tokenProjectId ? '(from token)' : '(from env)');
+    } else {
+      console.log('[EVENT] No project ID set - Google will infer from OAuth token');
     }
     
     const response = await fetch(
