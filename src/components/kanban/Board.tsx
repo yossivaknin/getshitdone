@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { getAllTagsWithColors, getLightTagColor } from '@/lib/tags';
+import { getAllTagsWithColors, getLightTagColor, getTagColor } from '@/lib/tags';
 import {
   DndContext,
   DragOverlay,
@@ -485,7 +485,45 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         setIsMounted(true);
         
         const loadTags = () => {
-            setAllTagsWithColors(getAllTagsWithColors());
+            // Get managed tags from localStorage
+            const managedTags = getAllTagsWithColors();
+            
+            // Also extract tags from actual tasks (in case some tags aren't in managed tags)
+            const taskTagsMap = new Map<string, { name: string; color: string }>();
+            tasks.forEach((task: any) => {
+                if (task.tags && Array.isArray(task.tags)) {
+                    task.tags.forEach((tag: any) => {
+                        const tagName = typeof tag === 'string' ? tag : tag.name;
+                        if (tagName && !taskTagsMap.has(tagName)) {
+                            // Use color from tag if available, otherwise get from managed tags or generate
+                            const tagColor = typeof tag === 'object' && tag.color 
+                                ? tag.color 
+                                : getTagColor(tagName);
+                            taskTagsMap.set(tagName, {
+                                name: tagName,
+                                color: tagColor
+                            });
+                        }
+                    });
+                }
+            });
+            
+            // Combine managed tags and task tags, with managed tags taking precedence for colors
+            const combinedTags = new Map<string, { name: string; color: string }>();
+            
+            // First add all managed tags
+            managedTags.forEach(tag => {
+                combinedTags.set(tag.name, tag);
+            });
+            
+            // Then add task tags that aren't in managed tags
+            taskTagsMap.forEach((tag, name) => {
+                if (!combinedTags.has(name)) {
+                    combinedTags.set(name, tag);
+                }
+            });
+            
+            setAllTagsWithColors(Array.from(combinedTags.values()));
         };
         
         // Load tags immediately after mount
@@ -505,7 +543,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             window.removeEventListener('storage', handleStorageChange);
             window.removeEventListener('tagsUpdated', loadTags);
         };
-    }, []);
+    }, [tasks]); // Re-run when tasks change to pick up new tags
 
     return (
         <DndContext
