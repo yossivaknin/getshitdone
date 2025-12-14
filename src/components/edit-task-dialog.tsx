@@ -92,13 +92,26 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       // Always update selectedTags from task.tags to reflect latest state
       // Handle both object format {name, color} and string format
       const taskTagNames = task.tags?.map((t: any) => typeof t === 'string' ? t : t.name) || [];
-      console.log('[EditTaskDialog] Updating selectedTags from task:', {
-        taskId: task.id,
-        taskTags: task.tags,
-        tagNames: taskTagNames,
-        currentSelectedTags: selectedTags
-      });
-      setSelectedTags(taskTagNames);
+      
+      // Only update if tags actually changed to avoid unnecessary re-renders
+      const currentTagNames = selectedTags.sort().join(',');
+      const newTagNames = taskTagNames.sort().join(',');
+      
+      if (currentTagNames !== newTagNames) {
+        console.log('[EditTaskDialog] Updating selectedTags from task:', {
+          taskId: task.id,
+          taskTags: task.tags,
+          tagNames: taskTagNames,
+          currentSelectedTags: selectedTags,
+          willUpdate: true
+        });
+        setSelectedTags(taskTagNames);
+      } else {
+        console.log('[EditTaskDialog] Tags unchanged, skipping update:', {
+          taskId: task.id,
+          tagNames: taskTagNames
+        });
+      }
       
       // Load chunking settings from task
       if (task.chunkCount && task.chunkCount > 1 && task.chunkDuration) {
