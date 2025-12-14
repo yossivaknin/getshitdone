@@ -30,6 +30,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
     const [isScheduling, setIsScheduling] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const touchStartRef = useRef<number | null>(null);
+    const hasMovedRef = useRef(false);
 
     const {
         attributes,
@@ -103,13 +105,41 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
             return;
         }
         
-        // Don't open if we're currently dragging
-        if (isDragging) {
+        // Don't open if we're currently dragging or if we moved during touch
+        if (isDragging || hasMovedRef.current) {
+            hasMovedRef.current = false;
+            touchStartRef.current = null;
             return;
         }
         
+        // For touch events, check if it was a quick tap (not a long press)
+        if (e.type === 'touchend' && touchStartRef.current) {
+            const touchDuration = Date.now() - touchStartRef.current;
+            // If touch was held for more than 400ms, it might have been a long press attempt
+            // (Our drag activation is 500ms, so 400ms is safe threshold)
+            if (touchDuration > 400) {
+                touchStartRef.current = null;
+                return;
+            }
+        }
+        
+        touchStartRef.current = null;
+        hasMovedRef.current = false;
+        
         if (onEdit) {
             setIsEditDialogOpen(true);
+        }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartRef.current = Date.now();
+        hasMovedRef.current = false;
+    };
+
+    const handleTouchMove = () => {
+        // If user moves finger during touch, mark as moved (likely a drag attempt)
+        if (touchStartRef.current) {
+            hasMovedRef.current = true;
         }
     };
 
@@ -222,6 +252,8 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [] }: TaskCardProps
                     isDragging && "scale-105 opacity-50"
                 )}
                 onClick={handleCardClick}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
                 onTouchEnd={handleCardClick}
             >
                 {/* Drag handle - visual indicator only, whole card is draggable */}

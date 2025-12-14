@@ -8,6 +8,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -103,9 +104,17 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const [activeTask, setActiveTask] = useState<any>(null);
     
     const sensors = useSensors(
+        // For mouse/pointer: require 8px movement (desktop behavior)
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8, // Require 8px of movement before drag starts
+                distance: 8,
+            },
+        }),
+        // For touch: require 500ms long press before drag starts (mobile behavior)
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 500, // 500ms long press
+                tolerance: 5, // Allow 5px movement during long press
             },
         }),
         useSensor(KeyboardSensor, {
