@@ -27,9 +27,21 @@ export function createClient() {
           },
           setAll(cookiesToSet) {
             try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              )
+              cookiesToSet.forEach(({ name, value, options }) => {
+                // Extend session cookies to 1 year (until user signs out)
+                // This applies to auth session cookies (sb-*-auth-token)
+                if (name.includes('auth-token')) {
+                  cookieStore.set(name, value, {
+                    ...options,
+                    maxAge: 60 * 60 * 24 * 365, // 1 year in seconds
+                    sameSite: 'lax',
+                    secure: process.env.NODE_ENV === 'production',
+                    httpOnly: true,
+                  })
+                } else {
+                  cookieStore.set(name, value, options)
+                }
+              })
             } catch {
               // The `setAll` method was called from a Server Component.
               // This can be ignored if you have middleware refreshing

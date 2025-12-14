@@ -21,7 +21,19 @@ export async function GET(request: NextRequest) {
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
               request.cookies.set(name, value)
-              response.cookies.set(name, value, options)
+              // Extend session cookies to 1 year (until user signs out)
+              // This applies to auth session cookies (sb-*-auth-token)
+              if (name.includes('auth-token')) {
+                response.cookies.set(name, value, {
+                  ...options,
+                  maxAge: 60 * 60 * 24 * 365, // 1 year in seconds
+                  sameSite: 'lax',
+                  secure: process.env.NODE_ENV === 'production',
+                  httpOnly: true,
+                })
+              } else {
+                response.cookies.set(name, value, options)
+              }
             })
           },
         },
