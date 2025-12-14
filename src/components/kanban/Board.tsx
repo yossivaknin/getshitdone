@@ -322,13 +322,22 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
         console.log('[DRAG] Moving task from', oldListId, 'to', newListId);
 
+        // Map UI column IDs to database status values
+        // UI uses 'in-progress' (hyphen), DB uses 'in_progress' (underscore)
+        const mapListIdToStatus = (listId: string): string => {
+            if (listId === 'in-progress') return 'in_progress';
+            return listId; // 'todo' and 'done' are the same
+        };
+
+        const newStatus = mapListIdToStatus(newListId);
+
         // Check if we're moving to or from "done" column
         const isMovingToDone = newListId === 'done';
         const isMovingFromDone = oldListId === 'done';
 
         // Update task status in database
         try {
-            const result = await updateTaskStatus(taskId, newListId);
+            const result = await updateTaskStatus(taskId, newStatus);
             if (result.error) {
                 console.error('[DRAG] Error updating task status:', result.error);
                 toast.error('Failed to update task status');
