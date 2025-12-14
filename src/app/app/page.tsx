@@ -26,6 +26,7 @@ export default function UnifiedViewPage() {
   // Hide sidebar by default to prevent flickering, will be shown on desktop after mount
   const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Set initial sidebar visibility based on screen size
   useEffect(() => {
@@ -157,6 +158,47 @@ export default function UnifiedViewPage() {
     return managedTags.map(tag => tag.name);
   }, [managedTags]);
 
+  // Keyboard shortcut for creating tasks
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Get shortcut from localStorage (default: 'n')
+      const shortcut = (localStorage.getItem('create_task_shortcut') || 'n').toLowerCase();
+      const key = e.key.toLowerCase();
+
+      // Check if the pressed key matches the shortcut
+      // Support both single key (e.g., 'n') and modifier combinations (e.g., 'ctrl+k', 'cmd+k')
+      if (key === shortcut) {
+        // For single letter shortcuts, check if no modifier is pressed (or just shift)
+        if (shortcut.length === 1 && /^[a-z0-9]$/.test(shortcut)) {
+          // Allow Shift for capital letters, but ignore other modifiers
+          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            setCreateDialogOpen(true);
+            console.log('[Keyboard] Create task dialog opened via shortcut:', shortcut);
+          }
+        }
+      }
+      
+      // Also support common shortcuts like Ctrl+K / Cmd+K if shortcut is 'k'
+      if (shortcut === 'k' && (e.ctrlKey || e.metaKey) && key === 'k') {
+        e.preventDefault();
+        setCreateDialogOpen(true);
+        console.log('[Keyboard] Create task dialog opened via Ctrl/Cmd+K');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-[#F4F5F7]">
       <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5 lg:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-transparent border-b border-gray-200">
@@ -211,6 +253,8 @@ export default function UnifiedViewPage() {
               onTasksChange={refreshTasks as any}
               allTags={allTags}
               onSelectTag={setSelectedTag}
+              createDialogOpen={createDialogOpen}
+              onCreateDialogOpenChange={setCreateDialogOpen}
             />
           )}
       </main>

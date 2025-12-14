@@ -28,13 +28,25 @@ interface BoardProps {
     onTasksChange?: (tasks: any[]) => void
     allTags?: string[] // All existing tags from all tasks
     onSelectTag?: (tagName: string | undefined) => void // Add tag selection handler
+    createDialogOpen?: boolean // External control of create dialog (for keyboard shortcuts)
+    onCreateDialogOpenChange?: (open: boolean) => void // Callback when create dialog state changes
 }
 
-export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag }: BoardProps) {
+export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag, createDialogOpen: externalCreateDialogOpen, onCreateDialogOpenChange }: BoardProps) {
     const [tasks, setTasks] = useState(initialTasks);
     const skipSyncRef = useRef(false);
-    const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);
     const [createDialogListId, setCreateDialogListId] = useState<string>('todo'); // Default to first column
+    
+    // Use external control if provided, otherwise use internal state
+    const createDialogOpen = externalCreateDialogOpen !== undefined ? externalCreateDialogOpen : internalCreateDialogOpen;
+    const setCreateDialogOpen = (open: boolean) => {
+        if (externalCreateDialogOpen !== undefined) {
+            onCreateDialogOpenChange?.(open);
+        } else {
+            setInternalCreateDialogOpen(open);
+        }
+    };
     
     // Sync with external changes, but skip if we just made a local update
     useEffect(() => {
@@ -601,6 +613,15 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                             onUpdateTask={handleUpdateTask}
                             onDeleteTask={handleDeleteTask}
                             allTags={allTags}
+                            createDialogOpen={createDialogOpen && createDialogListId === list.id}
+                            onCreateDialogOpenChange={(open) => {
+                                if (open) {
+                                    setCreateDialogListId(list.id);
+                                    setCreateDialogOpen(true);
+                                } else {
+                                    setCreateDialogOpen(false);
+                                }
+                            }}
                         />
                     ))}
                 </div>

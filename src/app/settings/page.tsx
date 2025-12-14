@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, CheckCircle2, XCircle, Loader2, Search, ArrowLeft, X } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Loader2, Search, ArrowLeft, X, Keyboard } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { testCalendarAPI } from '@/app/test-calendar';
@@ -28,6 +28,12 @@ export default function SettingsPage() {
       return localStorage.getItem('working_hours_end') || '18:00';
     }
     return '18:00';
+  });
+  const [createTaskShortcut, setCreateTaskShortcut] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('create_task_shortcut') || 'n';
+    }
+    return 'n';
   });
   const [redirectUri, setRedirectUri] = useState('');
 
@@ -487,6 +493,73 @@ export default function SettingsPage() {
                   localStorage.setItem('working_hours_end', e.target.value);
                 }}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Keyboard Shortcut Settings */}
+        <div className="bg-white rounded-md shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Keyboard className="w-6 h-6 text-gray-500" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Keyboard Shortcuts</h2>
+              <p className="text-sm text-gray-500">Configure quick actions</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="create-task-shortcut" className="mb-2 block">
+                Create Task Shortcut
+              </Label>
+              <p className="text-sm text-gray-500 mb-3">
+                Press this key to quickly open the create task dialog. Default: <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">N</kbd>
+              </p>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="create-task-shortcut"
+                  type="text"
+                  value={createTaskShortcut}
+                  onChange={(e) => {
+                    const value = e.target.value.toLowerCase().trim();
+                    // Only allow single letter or number
+                    if (value.length <= 1 && /^[a-z0-9]$/.test(value)) {
+                      setCreateTaskShortcut(value);
+                      localStorage.setItem('create_task_shortcut', value);
+                      toast.success(`Shortcut set to: ${value.toUpperCase()}`);
+                    } else if (value.length > 1) {
+                      // Take only the last character if multiple entered
+                      const lastChar = value.slice(-1);
+                      if (/^[a-z0-9]$/.test(lastChar)) {
+                        setCreateTaskShortcut(lastChar);
+                        localStorage.setItem('create_task_shortcut', lastChar);
+                        toast.success(`Shortcut set to: ${lastChar.toUpperCase()}`);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Prevent the shortcut from triggering while editing
+                    e.stopPropagation();
+                    const key = e.key.toLowerCase();
+                    if (key.length === 1 && /^[a-z0-9]$/.test(key)) {
+                      e.preventDefault();
+                      setCreateTaskShortcut(key);
+                      localStorage.setItem('create_task_shortcut', key);
+                      toast.success(`Shortcut set to: ${key.toUpperCase()}`);
+                    }
+                  }}
+                  placeholder="n"
+                  className="w-20 font-mono text-center text-lg"
+                  maxLength={1}
+                />
+                <div className="text-sm text-gray-500">
+                  <p>Press any letter or number to set</p>
+                  <p className="text-xs mt-1">Current: <kbd className="px-2 py-1 bg-gray-100 rounded font-mono">{createTaskShortcut.toUpperCase()}</kbd></p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                💡 Tip: Use <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">K</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">Cmd</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">K</kbd> for common shortcuts, or a single letter like <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">N</kbd>
+              </p>
             </div>
           </div>
         </div>
