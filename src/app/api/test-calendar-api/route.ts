@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
     const googleApiKey = process.env.GOOGLE_API_KEY
 
     // Build URL with API key if available
-    let apiUrl = `https://www.googleapis.com/calendar/v3/freebusy`
+    // NOTE: endpoint is case-sensitive: /freeBusy (capital B), not /freebusy
+    let apiUrl = `https://www.googleapis.com/calendar/v3/freeBusy`
     if (googleApiKey) {
       apiUrl += `?key=${encodeURIComponent(googleApiKey)}`
     }

@@ -114,19 +114,16 @@ export async function getBusySlots(
     };
     
     console.log('[CALENDAR] Request body:', JSON.stringify(requestBody, null, 2));
-    console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freebusy');
+    console.log('[CALENDAR] API endpoint: https://www.googleapis.com/calendar/v3/freeBusy');
     console.log('[CALENDAR] Token preview:', config.accessToken.substring(0, 20) + '...');
     
     // Don't add X-Goog-User-Project header - let Google infer the project from the OAuth token
     // The Calendar list API works without this header, so FreeBusy should too
     // Adding the wrong project ID causes 404 errors
-    const googleApiKey = process.env.GOOGLE_API_KEY;
     
-    // Build URL with API key if available (optional - helps with project identification)
-    let apiUrl = `https://www.googleapis.com/calendar/v3/freebusy`;
-    if (googleApiKey) {
-      apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
-    }
+    // Build URL - NOTE: endpoint is case-sensitive: /freeBusy (capital B), not /freebusy
+    // Don't append API key when using OAuth token - it's not needed and can complicate debugging
+    const apiUrl = `https://www.googleapis.com/calendar/v3/freeBusy`;
     
     // Build headers - NO X-Goog-User-Project header
     // Google will automatically infer the project from the OAuth token's audience
