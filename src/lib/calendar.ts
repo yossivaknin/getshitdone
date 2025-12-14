@@ -562,17 +562,11 @@ export async function createCalendarEvent(
     console.log('[EVENT] API endpoint: https://www.googleapis.com/calendar/v3/calendars/primary/events');
     
     // Don't add X-Goog-User-Project header - let Google infer the project from the OAuth token
-    // This avoids project mismatch issues
-    const googleApiKey = process.env.GOOGLE_API_KEY;
-    
-    // Build URL with API key if available (optional)
-    let apiUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
-    if (googleApiKey) {
-      apiUrl += `?key=${encodeURIComponent(googleApiKey)}`;
-    }
-    
-    // Build headers - NO X-Goog-User-Project header
+    // Don't append API key - it's not needed with OAuth tokens and causes "different projects" errors
     // Google will automatically infer the project from the OAuth token's audience
+    const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+    
+    // Build headers - NO X-Goog-User-Project header, NO API key
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.accessToken}`,
       'Content-Type': 'application/json',
@@ -628,25 +622,14 @@ export async function createCalendarEvent(
     
     // Verify the event was actually created by fetching it back
     try {
-      // Get Google Cloud project ID and API key from environment (optional)
-      const googleProjectId = getGoogleProjectId();
-      const googleApiKey = process.env.GOOGLE_API_KEY;
+      // Don't append API key - it's not needed with OAuth tokens and causes "different projects" errors
+      // Google will automatically infer the project from the OAuth token's audience
+      const verifyUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.id}`;
       
-      // Build URL with API key if available
-      let verifyUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.id}`;
-      if (googleApiKey) {
-        verifyUrl += `?key=${encodeURIComponent(googleApiKey)}`;
-      }
-      
-      // Build headers - include X-Goog-User-Project only if we can determine it
+      // Build headers - NO X-Goog-User-Project header, NO API key
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${config.accessToken}`,
       };
-      
-      // Only add X-Goog-User-Project if we have it (optional - Google can infer from token)
-      if (googleProjectId) {
-        headers['X-Goog-User-Project'] = googleProjectId;
-      }
       
       const verifyResponse = await fetch(
         verifyUrl,
