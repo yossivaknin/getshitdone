@@ -632,23 +632,29 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                             >
                                 All Tasks
                             </button>
-                            {/* Show tags if they exist */}
-                            {allTagsWithColors.length > 0 && allTagsWithColors.map((tag) => {
-                                const isSelected = selectedTag === tag.name;
-                                return (
-                                    <button
-                                        key={tag.name}
-                                        onClick={() => onSelectTag?.(isSelected ? undefined : tag.name)}
-                                        className={`text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all ${
-                                            isSelected
-                                                ? 'bg-black text-white border-black'
-                                                : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        {tag.name}
-                </button>
-                                );
-                            })}
+                            {/* Show loading skeleton or tags */}
+                            {isLoadingTags ? (
+                                <div className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border bg-gray-100 text-gray-400 border-gray-300 animate-pulse">
+                                    Loading...
+                                </div>
+                            ) : (
+                                allTagsWithColors.length > 0 && allTagsWithColors.map((tag) => {
+                                    const isSelected = selectedTag === tag.name;
+                                    return (
+                                        <button
+                                            key={tag.name}
+                                            onClick={() => onSelectTag?.(isSelected ? undefined : tag.name)}
+                                            className={`text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all ${
+                                                isSelected
+                                                    ? 'bg-black text-white border-black'
+                                                    : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {tag.name}
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     )}
                 </div>
