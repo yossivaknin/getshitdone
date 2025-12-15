@@ -316,7 +316,8 @@ export function findFreeSlots(
   console.log('[FREESLOTS] Timezone parameter type:', typeof timezone);
   console.log('[FREESLOTS] Timezone parameter is undefined?', timezone === undefined);
   console.log('[FREESLOTS] Timezone parameter is null?', timezone === null);
-  console.log('[FREESLOTS] Server timezone (WRONG - don't use this!):', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const serverTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log('[FREESLOTS] Server timezone (WRONG - do not use this!):', serverTz);
   
   const timeZone = timezone || 'America/New_York';
   console.log('[FREESLOTS] Final timezone being used:', timeZone);
