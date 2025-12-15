@@ -244,7 +244,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             if (result.success) {
                 toast.success(result.message);
                 // Update task with event IDs
-                if (result.eventIds && onEdit) {
+                if ('eventIds' in result && result.eventIds && onEdit) {
                     onEdit({ ...task, googleEventIds: result.eventIds });
                 }
             } else {
