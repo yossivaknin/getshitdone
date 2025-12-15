@@ -206,13 +206,21 @@ export async function smartSchedule(
     }
     
     // Find free slots, excluding already scheduled chunks
+    const userTimezone = config.timezone || 'America/New_York';
+    console.log(`[SMART-SCHEDULE] Calling findFreeSlots with:`);
+    console.log(`[SMART-SCHEDULE]   workingHoursStart: ${config.workingHoursStart}`);
+    console.log(`[SMART-SCHEDULE]   workingHoursEnd: ${config.workingHoursEnd}`);
+    console.log(`[SMART-SCHEDULE]   timezone: ${userTimezone}`);
+    console.log(`[SMART-SCHEDULE]   chunkDuration: ${chunkDuration} minutes`);
+    
     let freeSlots = findFreeSlots(
       scheduledSlots, // Use scheduledSlots which includes previously scheduled chunks
       currentTime,
       dueDate,
       config.workingHoursStart,
       config.workingHoursEnd,
-      chunkDuration
+      chunkDuration,
+      userTimezone // CRITICAL: Pass user's timezone!
     );
     
     console.log(`[SMART-SCHEDULE] Found ${freeSlots.length} free slot(s) for chunk ${i + 1}`);

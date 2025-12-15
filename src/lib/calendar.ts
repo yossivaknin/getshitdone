@@ -302,7 +302,8 @@ export function findFreeSlots(
   timeMax: Date,
   workingHoursStart: string,
   workingHoursEnd: string,
-  durationMinutes: number
+  durationMinutes: number,
+  timezone: string = 'America/New_York' // IANA timezone
 ): TimeSlot[] {
   const freeSlots: TimeSlot[] = [];
   const [startHour, startMin] = workingHoursStart.split(':').map(Number);
