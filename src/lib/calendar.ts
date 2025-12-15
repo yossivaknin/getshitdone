@@ -311,15 +311,15 @@ export function findFreeSlots(
   
   // Use the timezone passed as parameter (from user's settings)
   // This is critical because the server might be in UTC, but we need to work in user's timezone
+  const timeZone = timezone || 'America/New_York';
+  
   console.log('[FREESLOTS] ========== TIMEZONE DEBUG ==========');
   console.log('[FREESLOTS] Timezone parameter received:', timezone);
   console.log('[FREESLOTS] Timezone parameter type:', typeof timezone);
   console.log('[FREESLOTS] Timezone parameter is undefined?', timezone === undefined);
   console.log('[FREESLOTS] Timezone parameter is null?', timezone === null);
-  const serverTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  console.log('[FREESLOTS] Server timezone (WRONG - do not use this!):', serverTz);
-  
-  const timeZone = timezone || 'America/New_York';
+  const serverTzDebug = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log('[FREESLOTS] Server timezone (WRONG - do not use this!):', serverTzDebug);
   console.log('[FREESLOTS] Final timezone being used:', timeZone);
   console.log('[FREESLOTS] ====================================');
   
