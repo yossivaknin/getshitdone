@@ -130,26 +130,36 @@ export default function UnifiedViewPage() {
     }
   };
 
-  // Load managed tags from localStorage and sync when storage changes
+  // Load tags from database (synced across devices)
   // Only load after mount to prevent hydration mismatch
   useEffect(() => {
-    const loadTags = () => {
-      setManagedTags(getAllTagsWithColors());
+    const loadTags = async () => {
+      try {
+        // Load from database
+        const { getUserTags } = await import('@/app/actions');
+        const { tags: dbTags, error } = await getUserTags();
+        
+        if (error || !dbTags || dbTags.length === 0) {
+          // Fallback to localStorage
+          setManagedTags(getAllTagsWithColors());
+        } else {
+          // Convert database tags to the format expected by the UI
+          setManagedTags(dbTags.map((t: any) => ({
+            name: t.name,
+            color: t.color || 'bg-gray-50 text-gray-600 border-gray-200'
+          })));
+        }
+      } catch (error) {
+        console.error('[App] Error loading tags:', error);
+        // Fallback to localStorage
+        setManagedTags(getAllTagsWithColors());
+      }
     };
     
     // Load tags immediately after mount
     loadTags();
     
-    // Listen for storage changes (when tags are updated in settings)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'getshitdone_tags') {
-        loadTags();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for custom event (for same-tab updates)
+    // Listen for custom events (when tags are updated)
     const handleTagUpdate = () => {
       loadTags();
     };
@@ -157,7 +167,6 @@ export default function UnifiedViewPage() {
     window.addEventListener('tagsUpdated', handleTagUpdate);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('tagsUpdated', handleTagUpdate);
     };
   }, []);

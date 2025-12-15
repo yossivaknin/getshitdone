@@ -53,26 +53,32 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
   const [showNewTagInput, setShowNewTagInput] = useState(false);
   const [managedTags, setManagedTags] = useState<string[]>([]);
 
-  // Load managed tags from localStorage
+  // Load tags from database
   useEffect(() => {
-    const loadTags = () => {
-      setManagedTags(getTagNames());
+    const loadTags = async () => {
+      try {
+        // Try to load from database first
+        const { getUserTags } = await import('@/app/actions');
+        const { tags: dbTags, error } = await getUserTags();
+        
+        if (error || !dbTags || dbTags.length === 0) {
+          // Fallback to localStorage
+          setManagedTags(getTagNames());
+        } else {
+          setManagedTags(dbTags.map((t: any) => t.name));
+        }
+      } catch (error) {
+        console.error('[EditTask] Error loading tags:', error);
+        // Fallback to localStorage
+        setManagedTags(getTagNames());
+      }
     };
     
     loadTags();
     
-    // Listen for storage changes
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'getshitdone_tags') {
-        loadTags();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('tagsUpdated', loadTags);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('tagsUpdated', loadTags);
     };
   }, []);
@@ -164,7 +170,7 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
     );
   };
 
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     const trimmedName = newTagName.trim();
     if (!trimmedName) return;
     
@@ -173,8 +179,16 @@ export function EditTaskDialog({ task, open, onOpenChange, onUpdateTask, allTags
       return;
     }
 
-    // Add tag to managed tags in localStorage
-    addTagToManaged(trimmedName);
+    // Save tag to database (syncs across devices)
+    const { saveUserTag } = await import('@/app/actions');
+    const tagColor = getTagColor(trimmedName);
+    const result = await saveUserTag(trimmedName, tagColor);
+    
+    if (result.error) {
+      console.error('[EditTask] Error saving tag to database:', result.error);
+      // Fallback to localStorage
+      addTagToManaged(trimmedName);
+    }
     
     // Trigger event to update other components
     window.dispatchEvent(new Event('tagsUpdated'));
