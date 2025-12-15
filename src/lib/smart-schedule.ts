@@ -282,20 +282,28 @@ export async function smartSchedule(
     const slotEndMin = selectedSlot.end.getMinutes();
     
     console.log(`[SMART-SCHEDULE] ✅ Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
-    console.log(`[SMART-SCHEDULE] Slot time: ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} - ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')}`);
+    console.log(`[SMART-SCHEDULE] Slot time (using getHours/getMinutes - WARNING: may be UTC!): ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} - ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')}`);
     console.log(`[SMART-SCHEDULE] Working hours: ${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
     console.log(`[SMART-SCHEDULE] ✅ Verified: No conflicts with ${scheduledSlots.length} busy slots`);
+    
+    // DEBUGGER: Pause here to inspect validation - THIS IS WHERE THE BUG LIKELY IS!
+    // WARNING: getHours() returns server timezone (UTC), not user timezone!
+    debugger; // Check: slotStartHour, slotStartMin, slotEndHour, slotEndMin, startHour, startMin, endHour, endMin
+    // NOTE: If server is UTC and user is NY, slotStartHour will be UTC time, not NY time!
+    // Example: 9 AM NY = 2 PM UTC (or 1 PM EDT), but getHours() on UTC date returns 14 (2 PM)
     
     // Validate slot is within working hours
     if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
       const error = `Selected slot starts before working hours: ${slotStartHour}:${slotStartMin}`;
       console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
+      debugger; // DEBUGGER: Pause here if validation fails
       throw new Error(error);
     }
     
     if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
       const error = `Selected slot ends after working hours: ${slotEndHour}:${slotEndMin}`;
       console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
+      debugger; // DEBUGGER: Pause here if validation fails
       throw new Error(error);
     }
     

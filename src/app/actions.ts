@@ -539,6 +539,9 @@ export async function scheduleTask(
     console.log('[SCHEDULE] Working hours (from parameters/localStorage):', `${defaultStart} - ${defaultEnd}`);
     console.log('[SCHEDULE] Working hours source:', workingHoursStart ? 'parameters' : (workingHoursEnd ? 'parameters (end only)' : 'defaults (09:00-18:00)'));
     
+    // DEBUGGER: Pause here to inspect working hours source
+    debugger; // Check: workingHoursStart, workingHoursEnd, defaultStart, defaultEnd
+    
     // Set end date to end of working day
     const [endHour, endMin] = defaultEnd.split(':').map(Number)
     dueDate.setHours(endHour, endMin, 0, 0)

@@ -294,6 +294,9 @@ export function findFreeSlots(
   // This is critical because the server might be in UTC, but we need to work in user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
   
+  // DEBUGGER: Pause here to inspect working hours and timezone
+  debugger; // Check: workingHoursStart, workingHoursEnd, timeZone, startHour, startMin, endHour, endMin
+  
   // Helper to get local time components in user's timezone
   const getLocalTime = (date: Date) => {
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -400,6 +403,9 @@ export function findFreeSlots(
   console.log('[FREESLOTS] Search range (local time):', `${startLocal.year}-${String(startLocal.month + 1).padStart(2, '0')}-${String(startLocal.day).padStart(2, '0')} ${startLocal.hour}:${startLocal.minute.toString().padStart(2, '0')}`,
     'to', `${endLocal.year}-${String(endLocal.month + 1).padStart(2, '0')}-${String(endLocal.day).padStart(2, '0')} ${endLocal.hour}:${endLocal.minute.toString().padStart(2, '0')}`);
   console.log('[FREESLOTS] Total busy slots received:', busySlots.length);
+  
+  // DEBUGGER: Pause here to inspect initial state
+  debugger; // Check: currentDate, endDate, startLocal, endLocal, busySlots.length
   
   // Sort busy slots by start time
   const sortedBusy = [...busySlots].sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -549,11 +555,14 @@ export function findFreeSlots(
           end: new Date(slotEnd)
         });
         
-        console.log(`[FREESLOTS] ✅ Found valid slot #${freeSlots.length + 1}:`);
+        console.log(`[FREESLOTS] ✅ Found valid slot #${freeSlots.length}:`);
         console.log(`[FREESLOTS]   UTC: ${new Date(currentDate).toISOString()} to ${slotEnd.toISOString()}`);
         console.log(`[FREESLOTS]   Local (${timeZone}): ${finalStartLocal.hour}:${finalStartLocal.minute.toString().padStart(2, '0')} - ${finalEndLocal.hour}:${finalEndLocal.minute.toString().padStart(2, '0')}`);
         console.log(`[FREESLOTS]   Duration: ${durationMinutes} minutes`);
         console.log(`[FREESLOTS]   ✅ Verified: No conflicts with ${sortedBusy.length} busy slots`);
+        
+        // DEBUGGER: Pause here when a slot is found - inspect the slot time
+        debugger; // Check: currentDate, slotEnd, finalStartLocal, finalEndLocal, isWithinWorkingHours
         
         // If we found enough slots, we can return early
         // For now, let's find at least one good slot
