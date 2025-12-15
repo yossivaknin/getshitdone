@@ -286,8 +286,24 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             if (result.error) {
                 toast.error(result.error);
             } else {
-                // Update local task state
-                onMoveTask({ ...task, status: newStatus, list_id: newListId });
+                // Update task with new status and list_id, then trigger refresh via onMoveTask
+                const updatedTask = {
+                    ...task,
+                    status: newStatus,
+                    list_id: newListId,
+                    // Ensure all required fields are present
+                    title: task.title,
+                    description: task.description,
+                    dueDate: task.dueDate,
+                    duration: task.duration,
+                    tags: task.tags || []
+                };
+                
+                // Call onMoveTask which will trigger refresh in Board component
+                if (onMoveTask) {
+                    onMoveTask(updatedTask);
+                }
+                
                 toast.success('Task moved');
             }
         } catch (error) {

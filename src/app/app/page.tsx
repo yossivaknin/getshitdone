@@ -5,7 +5,7 @@ import { Board } from "@/components/kanban/Board";
 import { MissionStatus } from "@/components/mission-status";
 import { MotivatorSubtitle } from "@/components/motivator-subtitle";
 import Link from 'next/link';
-import { Settings, ChevronRight, ChevronLeft, Target, LogOut } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, Target, LogOut, Plus } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
 import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
@@ -281,6 +281,19 @@ export default function UnifiedViewPage() {
           />
         )}
       </div>
+
+      {/* Floating Create Task Button */}
+      <button
+        onClick={() => {
+          // Open create dialog - Board defaults to 'todo' column
+          setCreateDialogOpen(true);
+        }}
+        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 h-14 w-14 md:h-16 md:w-16 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center active:scale-95"
+        title="Create New Task"
+        aria-label="Create New Task"
+      >
+        <Plus className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
