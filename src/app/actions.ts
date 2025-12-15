@@ -468,7 +468,8 @@ export async function scheduleTask(
   accessToken: string,
   refreshToken?: string,
   workingHoursStart?: string,
-  workingHoursEnd?: string
+  workingHoursEnd?: string,
+  timezone?: string
 ) {
   try {
     // Import scheduling functions
@@ -529,9 +530,10 @@ export async function scheduleTask(
       dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     }
 
-    // Get working hours from parameters or localStorage (client-side) or defaults
+    // Get working hours and timezone from parameters or defaults
     const defaultStart = workingHoursStart || '09:00'
     const defaultEnd = workingHoursEnd || '18:00'
+    const userTimezone = timezone || 'America/New_York' // Default to NY timezone
     
     const now = new Date();
     console.log('[SCHEDULE] ========== SCHEDULING TASK ==========');
@@ -540,18 +542,21 @@ export async function scheduleTask(
     console.log('[SCHEDULE] Current time (UTC):', now.toISOString());
     console.log('[SCHEDULE] Current time (local):', now.toLocaleString());
     console.log('[SCHEDULE] Working hours (from parameters/localStorage):', `${defaultStart} - ${defaultEnd}`);
+    console.log('[SCHEDULE] User timezone:', userTimezone);
     console.log('[SCHEDULE] Working hours source:', workingHoursStart ? 'parameters' : (workingHoursEnd ? 'parameters (end only)' : 'defaults (09:00-18:00)'));
     
     // Check localStorage to see what's actually stored
     if (typeof window !== 'undefined') {
       const storedStart = localStorage.getItem('working_hours_start');
       const storedEnd = localStorage.getItem('working_hours_end');
+      const storedTimezone = localStorage.getItem('user_timezone');
       console.log('[SCHEDULE] localStorage working_hours_start:', storedStart);
       console.log('[SCHEDULE] localStorage working_hours_end:', storedEnd);
+      console.log('[SCHEDULE] localStorage user_timezone:', storedTimezone);
     }
     
     // DEBUGGER: Pause here to inspect working hours source
-    debugger; // Check: workingHoursStart, workingHoursEnd, defaultStart, defaultEnd
+    debugger; // Check: workingHoursStart, workingHoursEnd, defaultStart, defaultEnd, userTimezone
     
     // Set end date to end of working day
     const [endHour, endMin] = defaultEnd.split(':').map(Number)
@@ -562,10 +567,12 @@ export async function scheduleTask(
       accessToken: validToken,
       refreshToken: refreshToken,
       workingHoursStart: defaultStart,
-      workingHoursEnd: defaultEnd
+      workingHoursEnd: defaultEnd,
+      timezone: userTimezone // CRITICAL: Pass user's timezone!
     }
     
     console.log('[SCHEDULE] Calendar config working hours:', `${config.workingHoursStart} - ${config.workingHoursEnd}`);
+    console.log('[SCHEDULE] Calendar config timezone:', config.timezone);
 
     // Get busy slots from now until due date
     // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings

@@ -222,9 +222,14 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
         console.log('[CLIENT] Calling scheduleTask server action...');
         
         try {
-            // Get working hours from localStorage
+            // Get working hours and timezone from localStorage
             const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
             const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+            const userTimezone = localStorage.getItem('user_timezone') || 
+                                 Intl.DateTimeFormat().resolvedOptions().timeZone || 
+                                 'America/New_York';
+            
+            console.log('[CLIENT] Scheduling with timezone:', userTimezone);
 
             const result = await scheduleTask({
                 id: task.id,
@@ -232,7 +237,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 duration: task.duration,
                 dueDate: task.dueDate,
                 list_id: task.list_id || 'todo'
-            }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd);
+            }, accessToken, refreshToken || undefined, workingHoursStart, workingHoursEnd, userTimezone);
             
             console.log('[CLIENT] Schedule result received:', result);
 

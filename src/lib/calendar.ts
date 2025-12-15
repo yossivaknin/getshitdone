@@ -308,9 +308,12 @@ export function findFreeSlots(
   const [startHour, startMin] = workingHoursStart.split(':').map(Number);
   const [endHour, endMin] = workingHoursEnd.split(':').map(Number);
   
-  // Get user's timezone - default to America/New_York (NY timezone)
+  // Use the timezone passed as parameter (from user's settings)
   // This is critical because the server might be in UTC, but we need to work in user's timezone
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+  const timeZone = timezone || 'America/New_York';
+  
+  console.log('[FREESLOTS] Using timezone from parameter:', timeZone);
+  console.log('[FREESLOTS] Server timezone would be:', Intl.DateTimeFormat().resolvedOptions().timeZone);
   
   // DEBUGGER: Pause here to inspect working hours and timezone
   debugger; // Check: workingHoursStart, workingHoursEnd, timeZone, startHour, startMin, endHour, endMin
