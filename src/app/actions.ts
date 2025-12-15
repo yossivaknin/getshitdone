@@ -533,6 +533,12 @@ export async function scheduleTask(
     const defaultStart = workingHoursStart || '09:00'
     const defaultEnd = workingHoursEnd || '18:00'
     
+    console.log('[SCHEDULE] ========== SCHEDULING TASK ==========');
+    console.log('[SCHEDULE] Task:', taskData.title);
+    console.log('[SCHEDULE] Duration:', taskData.duration, 'minutes');
+    console.log('[SCHEDULE] Working hours (from parameters/localStorage):', `${defaultStart} - ${defaultEnd}`);
+    console.log('[SCHEDULE] Working hours source:', workingHoursStart ? 'parameters' : (workingHoursEnd ? 'parameters (end only)' : 'defaults (09:00-18:00)'));
+    
     // Set end date to end of working day
     const [endHour, endMin] = defaultEnd.split(':').map(Number)
     dueDate.setHours(endHour, endMin, 0, 0)
@@ -544,6 +550,8 @@ export async function scheduleTask(
       workingHoursStart: defaultStart,
       workingHoursEnd: defaultEnd
     }
+    
+    console.log('[SCHEDULE] Calendar config working hours:', `${config.workingHoursStart} - ${config.workingHoursEnd}`);
 
     // Get busy slots from now until due date
     // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings

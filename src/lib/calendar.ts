@@ -162,11 +162,7 @@ export async function getBusySlots(
         console.error('[CALENDAR] Response URL:', response.url);
         console.error('[CALENDAR] Response headers:', Object.fromEntries(response.headers.entries()));
         
-        // If it was working before and suddenly stopped, possible causes:
-        // 1. OAuth consent screen needs re-verification
-        // 2. API quotas were hit
-        // 3. Google made API changes
-        // 4. The API got disabled somehow
+
         throw new Error(`Google Calendar API returned 404 HTML page. Since this was working before and suddenly stopped, possible causes:
 1. OAuth consent screen needs re-verification: https://console.cloud.google.com/apis/credentials/consent
 2. API quotas were hit: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/quotas
@@ -395,8 +391,14 @@ export function findFreeSlots(
   
   const endDate = createDateInUserTimezone(timeMax, endHour, endMin);
   
+  console.log('[FREESLOTS] ========== FINDING FREE SLOTS ==========');
+  console.log('[FREESLOTS] Working hours (from parameters):', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
+  console.log('[FREESLOTS] User timezone:', timeZone);
   console.log('[FREESLOTS] Searching from:', currentDate.toISOString(), 'to', endDate.toISOString());
-  console.log('[FREESLOTS] Working hours:', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
+  const startLocal = getLocalTime(currentDate);
+  const endLocal = getLocalTime(endDate);
+  console.log('[FREESLOTS] Search range (local time):', `${startLocal.year}-${String(startLocal.month + 1).padStart(2, '0')}-${String(startLocal.day).padStart(2, '0')} ${startLocal.hour}:${startLocal.minute.toString().padStart(2, '0')}`,
+    'to', `${endLocal.year}-${String(endLocal.month + 1).padStart(2, '0')}-${String(endLocal.day).padStart(2, '0')} ${endLocal.hour}:${endLocal.minute.toString().padStart(2, '0')}`);
   console.log('[FREESLOTS] Total busy slots received:', busySlots.length);
   
   // Sort busy slots by start time
@@ -547,9 +549,11 @@ export function findFreeSlots(
           end: new Date(slotEnd)
         });
         
-        console.log(`[FREESLOTS] ✅ Found valid slot: ${new Date(currentDate).toISOString()} to ${slotEnd.toISOString()}`);
-        console.log(`[FREESLOTS] Slot time (${timeZone}): ${finalStartLocal.hour}:${finalStartLocal.minute.toString().padStart(2, '0')} - ${finalEndLocal.hour}:${finalEndLocal.minute.toString().padStart(2, '0')}`);
-        console.log(`[FREESLOTS] ✅ Verified: No conflicts with ${sortedBusy.length} busy slots`);
+        console.log(`[FREESLOTS] ✅ Found valid slot #${freeSlots.length + 1}:`);
+        console.log(`[FREESLOTS]   UTC: ${new Date(currentDate).toISOString()} to ${slotEnd.toISOString()}`);
+        console.log(`[FREESLOTS]   Local (${timeZone}): ${finalStartLocal.hour}:${finalStartLocal.minute.toString().padStart(2, '0')} - ${finalEndLocal.hour}:${finalEndLocal.minute.toString().padStart(2, '0')}`);
+        console.log(`[FREESLOTS]   Duration: ${durationMinutes} minutes`);
+        console.log(`[FREESLOTS]   ✅ Verified: No conflicts with ${sortedBusy.length} busy slots`);
         
         // If we found enough slots, we can return early
         // For now, let's find at least one good slot
@@ -600,6 +604,27 @@ export function findFreeSlots(
       daysChecked++;
     }
   }
+  
+  console.log('[FREESLOTS] ========== FREE SLOTS SUMMARY ==========');
+  console.log(`[FREESLOTS] Total free slots found: ${freeSlots.length}`);
+  if (freeSlots.length > 0) {
+    console.log('[FREESLOTS] All available slots:');
+    freeSlots.forEach((slot, idx) => {
+      const slotStartLocal = getLocalTime(slot.start);
+      const slotEndLocal = getLocalTime(slot.end);
+      console.log(`[FREESLOTS]   Slot ${idx + 1}:`);
+      console.log(`[FREESLOTS]     UTC: ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
+      console.log(`[FREESLOTS]     Local (${timeZone}): ${slotStartLocal.year}-${String(slotStartLocal.month + 1).padStart(2, '0')}-${String(slotStartLocal.day).padStart(2, '0')} ${slotStartLocal.hour}:${slotStartLocal.minute.toString().padStart(2, '0')} - ${slotEndLocal.hour}:${slotEndLocal.minute.toString().padStart(2, '0')}`);
+      console.log(`[FREESLOTS]     Duration: ${Math.round((slot.end.getTime() - slot.start.getTime()) / (1000 * 60))} minutes`);
+    });
+  } else {
+    console.warn('[FREESLOTS] ⚠️ NO FREE SLOTS FOUND!');
+    console.warn('[FREESLOTS] This might mean:');
+    console.warn('[FREESLOTS]   1. Calendar is completely booked');
+    console.warn('[FREESLOTS]   2. Working hours are too restrictive');
+    console.warn('[FREESLOTS]   3. Time range is too short');
+  }
+  console.log('[FREESLOTS] ========================================');
   
   return freeSlots;
 }

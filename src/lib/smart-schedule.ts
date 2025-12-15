@@ -144,8 +144,11 @@ export async function smartSchedule(
   // Sort busy slots by start time for efficient conflict checking
   scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
   
+  console.log(`[SMART-SCHEDULE] ========== SMART SCHEDULING ==========`);
+  console.log(`[SMART-SCHEDULE] Task: ${task.title}`);
+  console.log(`[SMART-SCHEDULE] Duration: ${duration} minutes`);
+  console.log(`[SMART-SCHEDULE] Working hours (from config): ${config.workingHoursStart} - ${config.workingHoursEnd}`);
   console.log(`[SMART-SCHEDULE] ✅ Starting with ${scheduledSlots.length} busy slots from calendar`);
-  console.log(`[SMART-SCHEDULE] Working hours: ${config.workingHoursStart} - ${config.workingHoursEnd}`);
   
   // Log ALL busy slots for verification (not just first 3)
   if (scheduledSlots.length > 0) {
