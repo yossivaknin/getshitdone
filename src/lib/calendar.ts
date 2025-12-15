@@ -465,9 +465,10 @@ export function findFreeSlots(
     
     // If current time is after working hours end, move to next day
     if (currentLocal.hour > endHour || (currentLocal.hour === endHour && currentLocal.minute >= endMin)) {
-      const nextDay = new Date(currentDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
+      // Use Luxon to properly add a day in user's timezone
+      const currentDT = DateTime.fromJSDate(currentDate, { zone: timeZone });
+      const nextDayDT = currentDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
+      currentDate = nextDayDT.toJSDate();
       daysChecked++;
       console.log(`[FREESLOTS] Moved to next day's working hours start: ${currentDate.toISOString()} (${timeZone})`);
       continue;
@@ -498,9 +499,10 @@ export function findFreeSlots(
     // Final validation: ensure slot is within the day's working hours
     const slotEndLocalCheck = getLocalTime(slotEnd);
     if (slotEndLocalCheck.hour > endHour || (slotEndLocalCheck.hour === endHour && slotEndLocalCheck.minute > endMin)) {
-      const nextDay = new Date(currentDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
+      // Use Luxon to properly add a day in user's timezone
+      const currentDT = DateTime.fromJSDate(currentDate, { zone: timeZone });
+      const nextDayDT = currentDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
+      currentDate = nextDayDT.toJSDate();
       daysChecked++;
       continue;
     }
@@ -605,9 +607,10 @@ export function findFreeSlots(
         });
         // If slot is outside working hours, move to next day's start instead of incrementing
         if (!isWithinWorkingHours) {
-          currentDate.setDate(currentDate.getDate() + 1);
-          currentDate.setHours(startHour, startMin, 0, 0);
-          currentDate.setMinutes(0, 0, 0);
+          // Use Luxon to properly add a day in user's timezone
+          const currentDT = DateTime.fromJSDate(currentDate, { zone: timeZone });
+          const nextDayDT = currentDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
+          currentDate = nextDayDT.toJSDate();
           daysChecked++;
           continue;
         }
@@ -616,26 +619,30 @@ export function findFreeSlots(
     
     // Move to next potential slot (15-minute increments for efficiency)
     // But ensure we don't go past working hours
-    const nextSlot = new Date(currentDate.getTime() + 15 * 60 * 1000);
-    const nextSlotHour = nextSlot.getHours();
-    const nextSlotMin = nextSlot.getMinutes();
-    const nextSlotTime = nextSlotHour * 60 + nextSlotMin;
+    // CRITICAL: Use Luxon to properly handle timezone-aware date arithmetic
+    const currentDT = DateTime.fromJSDate(currentDate, { zone: timeZone });
+    const nextSlotDT = currentDT.plus({ minutes: 15 });
+    const nextSlotLocal = getLocalTime(nextSlotDT.toJSDate());
+    const nextSlotTime = nextSlotLocal.hour * 60 + nextSlotLocal.minute;
     const workingEndTime = endHour * 60 + endMin;
+    const currentLocal = getLocalTime(currentDate);
     
-    if (nextSlotTime > workingEndTime || nextSlot.getDate() !== currentDate.getDate()) {
-      // Move to next day's start
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
-      currentDate.setMinutes(0, 0, 0);
+    // Check if next slot is past working hours or different day
+    if (nextSlotTime > workingEndTime || nextSlotLocal.day !== currentLocal.day) {
+      // Move to next day's start in user's timezone
+      const nextDayDT = currentDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
+      currentDate = nextDayDT.toJSDate();
       daysChecked++;
     } else {
-      currentDate = nextSlot;
+      currentDate = nextSlotDT.toJSDate();
     }
     
-    // If we've moved past end of day, go to next day
-    if (currentDate.getHours() >= endHour && currentDate.getMinutes() >= endMin) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
+    // If we've moved past end of day, go to next day (using Luxon)
+    const finalLocal = getLocalTime(currentDate);
+    if (finalLocal.hour > endHour || (finalLocal.hour === endHour && finalLocal.minute >= endMin)) {
+      const finalDT = DateTime.fromJSDate(currentDate, { zone: timeZone });
+      const nextDayDT = finalDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
+      currentDate = nextDayDT.toJSDate();
       daysChecked++;
     }
   }
