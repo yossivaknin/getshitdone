@@ -675,6 +675,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                                         setCreateDialogOpen(false);
                                     }
                                 }}
+                                onRefreshTasks={onRefreshTasks}
                             />
                         );
                     })}
