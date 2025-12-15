@@ -1,6 +1,6 @@
 // Google Calendar API utilities
 // This will be used server-side for calendar operations
-debugger;
+
 export interface CalendarEvent {
   start: Date;
   end: Date;
