@@ -134,27 +134,30 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // Disable DND sensors on mobile, enable on desktop
+    // Create sensors - disable on mobile by using a very high activation constraint
+    // This ensures hooks are always called in the same order
+    const pointerSensor = useSensor(PointerSensor, {
+        activationConstraint: {
+            distance: isMobile ? 9999 : 8, // Disable on mobile by requiring impossible distance
+        },
+    });
+    
+    const touchSensor = useSensor(TouchSensor, {
+        activationConstraint: {
+            delay: isMobile ? 999999 : 500, // Disable on mobile with very long delay
+            tolerance: 5,
+        },
+    });
+    
+    const keyboardSensor = useSensor(KeyboardSensor, {
+        coordinateGetter: sortableKeyboardCoordinates,
+    });
+    
+    // Only include sensors on desktop (mobile will have impossible activation constraints)
     const sensors = useSensors(
-        // Only enable sensors on desktop (md and above)
-        ...(isMobile ? [] : [
-            // For mouse/pointer: require 8px movement (desktop behavior)
-            useSensor(PointerSensor, {
-                activationConstraint: {
-                    distance: 8,
-                },
-            }),
-            // For touch: require 500ms long press before drag starts (mobile behavior)
-            useSensor(TouchSensor, {
-                activationConstraint: {
-                    delay: 500, // 500ms long press
-                    tolerance: 5, // Allow 5px movement during long press
-                },
-            }),
-            useSensor(KeyboardSensor, {
-                coordinateGetter: sortableKeyboardCoordinates,
-            })
-        ])
+        pointerSensor,
+        touchSensor,
+        keyboardSensor
     );
     
     // Filter tasks by selected tag
