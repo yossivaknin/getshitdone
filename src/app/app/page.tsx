@@ -11,7 +11,6 @@ import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useTokenRefresh } from '@/hooks/useTokenRefresh';
-import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 
 // Kanban columns (these are the status columns - unified across all lists)
 const kanbanColumns = [
@@ -29,6 +28,9 @@ export default function UnifiedViewPage() {
   const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  // Automatically refresh Google Calendar token in the background
+  useTokenRefresh();
 
   // Set initial sidebar visibility based on screen size
   useEffect(() => {
