@@ -326,51 +326,38 @@ export function findFreeSlots(
   // DEBUGGER: Pause here to inspect working hours and timezone
   debugger; // Check: workingHoursStart, workingHoursEnd, timeZone, startHour, startMin, endHour, endMin
   
-  // Helper to get local time components in user's timezone
+  // Helper to get local time components in user's timezone using Luxon
   const getLocalTime = (date: Date) => {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    const parts = formatter.formatToParts(date);
+    const dt = DateTime.fromJSDate(date, { zone: timeZone });
     return {
-      year: parseInt(parts.find(p => p.type === 'year')?.value || '0'),
-      month: parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1,
-      day: parseInt(parts.find(p => p.type === 'day')?.value || '0'),
-      hour: parseInt(parts.find(p => p.type === 'hour')?.value || '0'),
-      minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+      year: dt.year,
+      month: dt.month - 1, // JavaScript months are 0-indexed
+      day: dt.day,
+      hour: dt.hour,
+      minute: dt.minute
     };
   };
   
-  // Helper to create a date in user's timezone with specific hour/minute
-  // This properly converts from user's local time to UTC for the Date object
+  // Helper to create a date in user's timezone with specific hour/minute, then convert to UTC
+  // This is the CRITICAL FIX: Use Luxon to properly convert from user's timezone to UTC
   const createDateInUserTimezone = (baseDate: Date, hour: number, minute: number): Date => {
+    // Get the date components in user's timezone
     const local = getLocalTime(baseDate);
-    // Create a date string representing the time in the user's timezone
-    const dateStr = `${local.year}-${String(local.month + 1).padStart(2, '0')}-${String(local.day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
     
-    // Create a date object - JavaScript will interpret this as local server time
-    // We need to convert it to represent the correct UTC time for the user's timezone
-    // Method: Create a date in UTC that represents the same moment in user's timezone
-    const tempDate = new Date(dateStr);
+    // Create a DateTime in the user's timezone with the specified hour/minute
+    const dtInUserTz = DateTime.fromObject({
+      year: local.year,
+      month: local.month + 1, // Luxon months are 1-indexed
+      day: local.day,
+      hour: hour,
+      minute: minute,
+      second: 0,
+      millisecond: 0
+    }, { zone: timeZone });
     
-    // Get the timezone offset for the user's timezone at this date
-    // We'll use a trick: format the date in both UTC and user's timezone to get the offset
-    const utcStr = tempDate.toLocaleString('en-US', { timeZone: 'UTC', hour12: false });
-    const tzStr = tempDate.toLocaleString('en-US', { timeZone: timeZone, hour12: false });
-    
-    // Parse both to get the offset
-    const utcDate = new Date(utcStr);
-    const tzDate = new Date(tzStr);
-    const offset = utcDate.getTime() - tzDate.getTime();
-    
-    // Apply the offset to get the correct UTC time
-    return new Date(tempDate.getTime() - offset);
+    // Convert to UTC and return as JavaScript Date
+    const dtUTC = dtInUserTz.toUTC();
+    return dtUTC.toJSDate();
   };
   
   // Start from NOW or timeMin, whichever is later (don't schedule in the past!)
