@@ -580,9 +580,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             <div className="flex flex-col h-full min-h-0">
                 {/* Global Tags Section - Always render container to prevent layout shift */}
                 <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 sm:pt-4 md:pt-5 lg:pt-6 pb-2 sm:pb-2.5 md:pb-3 flex-shrink-0 min-h-[44px]">
-                    {isMounted && allTagsWithColors.length > 0 && (
+                    {isMounted && (
                         <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                            {/* All Tasks button */}
+                            {/* All Tasks button - Always show */}
                             <button
                                 onClick={() => onSelectTag?.(undefined)}
                                 className={`text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all ${
@@ -593,7 +593,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                             >
                                 All Tasks
                             </button>
-                            {allTagsWithColors.map((tag) => {
+                            {/* Show tags if they exist */}
+                            {allTagsWithColors.length > 0 && allTagsWithColors.map((tag) => {
                                 const isSelected = selectedTag === tag.name;
                                 return (
                                     <button
