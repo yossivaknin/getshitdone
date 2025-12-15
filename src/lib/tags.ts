@@ -1,4 +1,6 @@
 // Utility functions for tag management
+// NOTE: Tags are now stored in the database (user_tags table) for cross-device sync
+// localStorage is kept as a fallback/cache for backward compatibility
 
 export const STORAGE_KEY = 'getshitdone_tags';
 

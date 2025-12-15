@@ -12,6 +12,108 @@ export async function logout() {
 }
 
 // Task Actions
+/**
+ * Get all unique tags for the current user from the database
+ */
+export async function getUserTags() {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return { tags: [], error: null }
+    }
+
+    const { data: tags, error } = await supabase
+      .from('user_tags')
+      .select('id, name, color')
+      .eq('user_id', user.id)
+      .order('name')
+
+    if (error) {
+      console.error('[GET USER TAGS] Error:', error)
+      return { tags: [], error: error.message }
+    }
+
+    return { tags: tags || [], error: null }
+  } catch (error: any) {
+    console.error('[GET USER TAGS] Exception:', error)
+    return { tags: [], error: error.message }
+  }
+}
+
+/**
+ * Create or update a tag for the current user
+ */
+export async function saveUserTag(tagName: string, color?: string) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return { error: 'Not authenticated' }
+    }
+
+    // Use default color if not provided
+    const tagColor = color || 'bg-gray-50 text-gray-600 border-gray-200'
+
+    // Try to insert, or update if exists (due to UNIQUE constraint)
+    const { data, error } = await supabase
+      .from('user_tags')
+      .upsert({
+        user_id: user.id,
+        name: tagName.trim(),
+        color: tagColor
+      }, {
+        onConflict: 'user_id,name'
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[SAVE USER TAG] Error:', error)
+      return { error: error.message }
+    }
+
+    revalidatePath('/app')
+    return { tag: data, error: null }
+  } catch (error: any) {
+    console.error('[SAVE USER TAG] Exception:', error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Delete a tag for the current user
+ */
+export async function deleteUserTag(tagName: string) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return { error: 'Not authenticated' }
+    }
+
+    const { error } = await supabase
+      .from('user_tags')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('name', tagName.trim())
+
+    if (error) {
+      console.error('[DELETE USER TAG] Error:', error)
+      return { error: error.message }
+    }
+
+    revalidatePath('/app')
+    return { error: null }
+  } catch (error: any) {
+    console.error('[DELETE USER TAG] Exception:', error)
+    return { error: error.message }
+  }
+}
+
 export async function getTasks() {
   const supabase = createClient()
   

@@ -121,7 +121,7 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
     );
   };
 
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     const trimmedName = newTagName.trim();
     if (!trimmedName) return;
     
@@ -129,8 +129,16 @@ export function CreateTaskDialog({ listId, workspaceId, children, trigger, onCre
       return;
     }
 
-    // Add tag to managed tags in localStorage
-    addTagToManaged(trimmedName);
+    // Save tag to database (syncs across devices)
+    const { saveUserTag } = await import('@/app/actions');
+    const tagColor = getTagColor(trimmedName);
+    const result = await saveUserTag(trimmedName, tagColor);
+    
+    if (result.error) {
+      console.error('[CreateTask] Error saving tag to database:', result.error);
+      // Fallback to localStorage
+      addTagToManaged(trimmedName);
+    }
     
     // Trigger event to update other components
     window.dispatchEvent(new Event('tagsUpdated'));

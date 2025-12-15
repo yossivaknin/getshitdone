@@ -500,7 +500,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         }
     }, [tasks, mapListIdToStatus, initialLists, updateTasks, handleDeleteCalendarEvents, handleRescheduleTask]);
 
-    // Get managed tags from localStorage (synced across app)
+    // Get tags from database (synced across devices)
     // Start with empty array to match server render, load after mount
     const [allTagsWithColors, setAllTagsWithColors] = useState<{ name: string; color: string }[]>([]);
     const [isMounted, setIsMounted] = useState(false);
@@ -509,78 +509,98 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         // Mark as mounted to prevent hydration mismatch
         setIsMounted(true);
         
-        const loadTags = () => {
-            // Get managed tags from localStorage
-            const managedTags = getAllTagsWithColors();
-            console.log('[Board] Loaded managed tags from localStorage:', managedTags.length, managedTags);
-            
-            // Also extract tags from actual tasks (in case some tags aren't in managed tags)
-            const taskTagsMap = new Map<string, { name: string; color: string }>();
-            tasks.forEach((task: any) => {
-                if (task.tags && Array.isArray(task.tags)) {
-                    task.tags.forEach((tag: any) => {
-                        const tagName = typeof tag === 'string' ? tag : tag.name;
-                        if (tagName && !taskTagsMap.has(tagName)) {
-                            // Use color from tag if available, otherwise get from managed tags or generate
-                            const tagColor = typeof tag === 'object' && tag.color 
-                                ? tag.color 
-                                : getTagColor(tagName);
-                            taskTagsMap.set(tagName, {
-                                name: tagName,
-                                color: tagColor
-                            });
-                        }
-                    });
+        const loadTags = async () => {
+            try {
+                // Fetch tags from database
+                const { getUserTags } = await import('@/app/actions');
+                const { tags: dbTags, error } = await getUserTags();
+                
+                if (error) {
+                    console.error('[Board] Error loading tags from database:', error);
+                    // Fallback to localStorage if database fails
+                    const managedTags = getAllTagsWithColors();
+                    setAllTagsWithColors(managedTags);
+                    return;
                 }
-            });
-            console.log('[Board] Extracted tags from tasks:', taskTagsMap.size, Array.from(taskTagsMap.keys()));
-            
-            // If localStorage is empty but we have tags in tasks, restore them to localStorage
-            if (managedTags.length === 0 && taskTagsMap.size > 0) {
-                console.log('[Board] ⚠️ No tags in localStorage, but found tags in tasks. Restoring to localStorage...');
-                taskTagsMap.forEach((tag) => {
-                    addTagToManaged(tag.name);
+                
+                console.log('[Board] Loaded tags from database:', dbTags.length, dbTags.map((t: any) => t.name));
+                
+                // Also extract tags from actual tasks (in case some tags aren't in database yet)
+                const taskTagsMap = new Map<string, { name: string; color: string }>();
+                tasks.forEach((task: any) => {
+                    if (task.tags && Array.isArray(task.tags)) {
+                        task.tags.forEach((tag: any) => {
+                            const tagName = typeof tag === 'string' ? tag : tag.name;
+                            if (tagName && !taskTagsMap.has(tagName)) {
+                                // Use color from tag if available, otherwise get from database tags or generate
+                                const dbTag = dbTags.find((t: any) => t.name === tagName);
+                                const tagColor = typeof tag === 'object' && tag.color 
+                                    ? tag.color 
+                                    : dbTag?.color || getTagColor(tagName);
+                                taskTagsMap.set(tagName, {
+                                    name: tagName,
+                                    color: tagColor
+                                });
+                            }
+                        });
+                    }
                 });
-                console.log('[Board] ✅ Restored', taskTagsMap.size, 'tags to localStorage');
-            }
-            
-            // Combine managed tags and task tags, with managed tags taking precedence for colors
-            const combinedTags = new Map<string, { name: string; color: string }>();
-            
-            // First add all managed tags (reload after potential restore)
-            const updatedManagedTags = getAllTagsWithColors();
-            updatedManagedTags.forEach(tag => {
-                combinedTags.set(tag.name, tag);
-            });
-            
-            // Then add task tags that aren't in managed tags
-            taskTagsMap.forEach((tag, name) => {
-                if (!combinedTags.has(name)) {
-                    combinedTags.set(name, tag);
+                console.log('[Board] Extracted tags from tasks:', taskTagsMap.size, Array.from(taskTagsMap.keys()));
+                
+                // If database is empty but we have tags in tasks, save them to database
+                if (dbTags.length === 0 && taskTagsMap.size > 0) {
+                    console.log('[Board] ⚠️ No tags in database, but found tags in tasks. Saving to database...');
+                    const { saveUserTag } = await import('@/app/actions');
+                    for (const [tagName, tag] of taskTagsMap) {
+                        await saveUserTag(tagName, tag.color);
+                    }
+                    console.log('[Board] ✅ Saved', taskTagsMap.size, 'tags to database');
+                    // Reload tags from database
+                    const { tags: updatedTags } = await getUserTags();
+                    dbTags.push(...(updatedTags || []));
                 }
-            });
-            
-            const finalTags = Array.from(combinedTags.values());
-            console.log('[Board] Final combined tags:', finalTags.length, finalTags.map(t => t.name));
-            setAllTagsWithColors(finalTags);
+                
+                // Combine database tags and task tags, with database tags taking precedence for colors
+                const combinedTags = new Map<string, { name: string; color: string }>();
+                
+                // First add all database tags
+                dbTags.forEach((tag: any) => {
+                    combinedTags.set(tag.name, {
+                        name: tag.name,
+                        color: tag.color || getTagColor(tag.name)
+                    });
+                });
+                
+                // Then add task tags that aren't in database
+                taskTagsMap.forEach((tag, name) => {
+                    if (!combinedTags.has(name)) {
+                        combinedTags.set(name, tag);
+                    }
+                });
+                
+                const finalTags = Array.from(combinedTags.values());
+                console.log('[Board] Final combined tags:', finalTags.length, finalTags.map(t => t.name));
+                setAllTagsWithColors(finalTags);
+            } catch (error) {
+                console.error('[Board] Error loading tags:', error);
+                // Fallback to localStorage
+                const managedTags = getAllTagsWithColors();
+                setAllTagsWithColors(managedTags);
+            }
         };
         
         // Load tags immediately after mount
         loadTags();
         
-        // Listen for storage changes
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'getshitdone_tags') {
-                loadTags();
-            }
+        // Listen for custom events (when tags are updated)
+        const handleTagUpdate = () => {
+            loadTags();
         };
         
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('tagsUpdated', loadTags);
+        window.addEventListener('tagsUpdated', handleTagUpdate);
         
         return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('tagsUpdated', loadTags);
+            window.removeEventListener('tagsUpdated', handleTagUpdate);
         };
     }, [tasks]); // Re-run when tasks change to pick up new tags
 
