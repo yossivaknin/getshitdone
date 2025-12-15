@@ -198,8 +198,10 @@ Make sure Calendar API is enabled in project ${projectNumber}`
 
     const config: CalendarConfig = {
       accessToken: validToken,
+      refreshToken: refreshToken,
       workingHoursStart: '09:00',
-      workingHoursEnd: '18:00'
+      workingHoursEnd: '18:00',
+      timezone: 'America/New_York' // Default timezone for test
     };
 
     // Test 3: Get busy slots (FreeBusy API)
