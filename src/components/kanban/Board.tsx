@@ -51,50 +51,25 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         }
     };
     
-    // Sync with external changes, but skip if we just made a local update
+    // Optimized sync with external changes - use ref to track previous tasks for efficient comparison
+    const prevTasksRef = useRef<string>('');
+    
     useEffect(() => {
         if (skipSyncRef.current) {
             skipSyncRef.current = false;
             return;
         }
         
-        // Check if tasks have actually changed (IDs, count, or content)
-        setTasks((currentTasks) => {
-            const currentTaskIds = currentTasks.map((t: any) => t.id).sort().join(',');
-            const newTaskIds = initialTasks.map((t: any) => t.id).sort().join(',');
-            
-            // Update if IDs or count changed
-            if (currentTaskIds !== newTaskIds || initialTasks.length !== currentTasks.length) {
-                return initialTasks;
-            }
-            
-            // Also check if task content (like tags) has changed
-            // Compare each task's data to detect changes in tags, title, etc.
-            const hasContentChanged = currentTasks.some((currentTask: any) => {
-                const newTask = initialTasks.find((t: any) => t.id === currentTask.id);
-                if (!newTask) return true; // Task was added/removed
-                
-                // Compare tags (most common change)
-                const currentTagNames = (currentTask.tags || []).map((t: any) => typeof t === 'string' ? t : t.name).sort().join(',');
-                const newTagNames = (newTask.tags || []).map((t: any) => typeof t === 'string' ? t : t.name).sort().join(',');
-                
-                // Compare other fields that might change
-                const titleChanged = currentTask.title !== newTask.title;
-                const descriptionChanged = currentTask.description !== newTask.description;
-                const statusChanged = currentTask.status !== newTask.status;
-                const tagsChanged = currentTagNames !== newTagNames;
-                
-                return titleChanged || descriptionChanged || statusChanged || tagsChanged;
-            });
-            
-            // Update if content changed
-            if (hasContentChanged) {
-                console.log('[Board] Task content changed, updating tasks array');
-                return initialTasks;
-            }
-            
-            return currentTasks;
-        });
+        // Create a lightweight hash of task IDs and key fields for quick comparison
+        const tasksHash = initialTasks.map((t: any) => 
+            `${t.id}:${t.status}:${(t.tags || []).map((tag: any) => typeof tag === 'string' ? tag : tag.name).sort().join(',')}`
+        ).sort().join('|');
+        
+        // Only update if hash changed (much faster than deep comparison)
+        if (prevTasksRef.current !== tasksHash) {
+            prevTasksRef.current = tasksHash;
+            setTasks(initialTasks);
+        }
     }, [initialTasks]);
     
     // Sync internal state with external changes

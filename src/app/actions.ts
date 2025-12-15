@@ -258,7 +258,10 @@ export async function createTask(taskData: {
     }
   }
 
-  revalidatePath('/')
+  // Only revalidate if task was actually created (not on error)
+  if (task) {
+    revalidatePath('/app')
+  }
   return { task, error: null }
 }
 
@@ -378,7 +381,10 @@ export async function updateTask(taskId: string, updates: {
     }
   }
 
-  revalidatePath('/')
+  // Only revalidate if task was actually updated (not on error)
+  if (task) {
+    revalidatePath('/app')
+  }
   return { task, error: null }
 }
 
@@ -401,7 +407,8 @@ export async function deleteTask(taskId: string) {
     return { error: error.message }
   }
 
-  revalidatePath('/')
+  // Only revalidate on successful delete
+  revalidatePath('/app')
   return { error: null }
 }
 

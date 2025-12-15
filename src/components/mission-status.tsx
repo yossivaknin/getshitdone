@@ -9,14 +9,48 @@ interface MissionStatusProps {
 }
 
 export function MissionStatus({ tasks }: MissionStatusProps) {
-  // Calculate today's date
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Calculate end of week (Sunday)
-  const endOfWeek = new Date(today);
-  endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
-  endOfWeek.setHours(23, 59, 59, 999);
+  // Memoize date calculations to avoid recalculating on every render
+  const { today, endOfWeek } = useMemo(() => {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    
+    const endOfWeekDate = new Date(todayDate);
+    endOfWeekDate.setDate(todayDate.getDate() + (7 - todayDate.getDay()));
+    endOfWeekDate.setHours(23, 59, 59, 999);
+    
+    return { today: todayDate, endOfWeek: endOfWeekDate };
+  }, []); // Only calculate once per day (could add date-based dependency for multi-day sessions)
+
+  // Optimized date parsing helper (memoized for better performance)
+  const parseTaskDate = useMemo(() => {
+    const dateCache = new Map<string, Date | null>();
+    return (dueDate: string, todayDate: Date): Date | null => {
+      if (dateCache.has(dueDate)) {
+        return dateCache.get(dueDate)!;
+      }
+      
+      // Handle relative dates (legacy format)
+      if (dueDate === 'Today') {
+        dateCache.set(dueDate, todayDate);
+        return todayDate;
+      }
+      
+      // Handle ISO date strings (YYYY-MM-DD format)
+      try {
+        const parsed = new Date(dueDate + 'T00:00:00');
+        if (isNaN(parsed.getTime())) {
+          dateCache.set(dueDate, null);
+          return null;
+        }
+        parsed.setHours(0, 0, 0, 0);
+        dateCache.set(dueDate, parsed);
+        return parsed;
+      } catch {
+        dateCache.set(dueDate, null);
+        return null;
+      }
+    };
+  }, []);
 
   // Parse due dates and categorize tasks
   const tasksToday = useMemo(() => {
@@ -24,21 +58,10 @@ export function MissionStatus({ tasks }: MissionStatusProps) {
       if (task.list_id === 'done') return false;
       if (!task.dueDate) return false;
       
-      // Handle relative dates (legacy format)
-      if (task.dueDate === 'Today') return true;
-      
-      // Handle ISO date strings (YYYY-MM-DD format)
-      try {
-        // If it's already an ISO date string, parse it directly
-        const dueDate = new Date(task.dueDate + 'T00:00:00'); // Add time to avoid timezone issues
-        if (isNaN(dueDate.getTime())) return false;
-        dueDate.setHours(0, 0, 0, 0);
-        return dueDate.getTime() === today.getTime();
-      } catch {
-        return false;
-      }
+      const dueDate = parseTaskDate(task.dueDate, today);
+      return dueDate !== null && dueDate.getTime() === today.getTime();
     });
-  }, [tasks, today]);
+  }, [tasks, today, parseTaskDate]);
 
   const tasksThisWeek = useMemo(() => {
     return tasks.filter((task: any) => {
@@ -48,18 +71,12 @@ export function MissionStatus({ tasks }: MissionStatusProps) {
       // Handle relative dates (legacy format)
       if (task.dueDate === 'Today' || task.dueDate === 'Tomorrow') return true;
       
-      // Handle ISO date strings (YYYY-MM-DD format)
-      try {
-        // If it's already an ISO date string, parse it directly
-        const dueDate = new Date(task.dueDate + 'T00:00:00'); // Add time to avoid timezone issues
-        if (isNaN(dueDate.getTime())) return false;
-        dueDate.setHours(0, 0, 0, 0);
-        return dueDate.getTime() >= today.getTime() && dueDate.getTime() <= endOfWeek.getTime();
-      } catch {
-        return false;
-      }
+      // Use cached date parser
+      const dueDate = parseTaskDate(task.dueDate, today);
+      if (dueDate === null) return false;
+      return dueDate.getTime() >= today.getTime() && dueDate.getTime() <= endOfWeek.getTime();
     });
-  }, [tasks, today, endOfWeek]);
+  }, [tasks, today, endOfWeek, parseTaskDate]);
 
   // Calculate total time budget
   const todayTimeBudget = tasksToday.reduce((sum: number, task: any) => sum + (task.duration || 0), 0);
