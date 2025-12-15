@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { getAllTagsWithColors, getLightTagColor, getTagColor } from '@/lib/tags';
+import { getAllTagsWithColors, getLightTagColor, getTagColor, addTagToManaged } from '@/lib/tags';
 import {
   DndContext,
   DragOverlay,
