@@ -2,15 +2,7 @@
 // This function can be called from both client and server
 export async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   try {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret) {
-      console.error('[TokenRefresh] Missing Google OAuth credentials');
-      return null;
-    }
-
-    // For client-side calls, we need to use an API route since client secret can't be exposed
+    // For client-side calls, ALWAYS use the API route since client secret can't be exposed
     if (typeof window !== 'undefined') {
       try {
         const response = await fetch('/api/refresh-token', {
@@ -22,7 +14,11 @@ export async function refreshAccessToken(refreshToken: string): Promise<string |
         });
 
         if (!response.ok) {
-          console.error('[TokenRefresh] Failed to refresh token via API route');
+          const errorText = await response.text();
+          console.error('[TokenRefresh] Failed to refresh token via API route:', {
+            status: response.status,
+            error: errorText
+          });
           return null;
         }
 
@@ -35,6 +31,14 @@ export async function refreshAccessToken(refreshToken: string): Promise<string |
     }
 
     // Server-side: can use client secret directly
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.error('[TokenRefresh] Missing Google OAuth credentials on server');
+      return null;
+    }
+
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -49,7 +53,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<string |
     });
 
     if (!response.ok) {
-      console.error('[TokenRefresh] Failed to refresh token');
+      console.error('[TokenRefresh] Failed to refresh token on server');
       return null;
     }
 
