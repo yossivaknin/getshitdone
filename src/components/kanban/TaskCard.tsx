@@ -279,7 +279,27 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             return; // Unknown column
         }
 
-        // Update task status directly
+        // Optimistic update: Update UI immediately for instant feedback
+        const updatedTask = {
+            ...task,
+            status: newStatus,
+            list_id: newListId,
+            title: task.title,
+            description: task.description,
+            dueDate: task.dueDate,
+            duration: task.duration,
+            tags: task.tags || []
+        };
+        
+        // Update UI immediately (optimistic)
+        if (onMoveTask) {
+            onMoveTask(updatedTask);
+        }
+        
+        // Show success immediately
+        toast.success('Task moved', { duration: 2000 });
+        
+        // Update database in background
         try {
             console.log('[QuickAction] Moving task:', {
                 taskId: task.id,
@@ -293,45 +313,28 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             
             if (result.error) {
                 console.error('[QuickAction] Error updating status:', result.error);
+                // Rollback optimistic update by refreshing from server
+                if (onRefreshTasks) {
+                    await onRefreshTasks();
+                }
                 toast.error(result.error);
             } else {
-                console.log('[QuickAction] Status updated successfully, waiting a moment for DB commit...');
+                console.log('[QuickAction] Status updated successfully, refreshing tasks in background...');
                 
-                // Small delay to ensure database commit is complete
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-                console.log('[QuickAction] Refreshing tasks...');
-                
-                // Refresh tasks directly instead of going through updateTask
-                // This avoids double-updating and ensures the task appears in the new column
+                // Refresh in background to sync with server (no user wait)
                 if (onRefreshTasks) {
-                    console.log('[QuickAction] Calling onRefreshTasks...');
-                    await onRefreshTasks();
-                    console.log('[QuickAction] Refresh completed');
-                } else if (onMoveTask) {
-                    console.log('[QuickAction] Using onMoveTask fallback...');
-                    // Fallback: use onMoveTask if onRefreshTasks is not available
-                    const updatedTask = {
-                        ...task,
-                        status: newStatus,
-                        list_id: newListId,
-                        title: task.title,
-                        description: task.description,
-                        dueDate: task.dueDate,
-                        duration: task.duration,
-                        tags: task.tags || []
-                    };
-                    await onMoveTask(updatedTask);
-                } else {
-                    console.warn('[QuickAction] No refresh method available!');
-                    // Force a page reload as last resort
-                    window.location.reload();
+                    // Don't await - let it happen in background
+                    onRefreshTasks().catch(err => {
+                        console.error('[QuickAction] Background refresh error:', err);
+                    });
                 }
-                
-                toast.success('Task moved');
             }
         } catch (error) {
             console.error('[QuickAction] Exception:', error);
+            // Rollback optimistic update
+            if (onRefreshTasks) {
+                await onRefreshTasks();
+            }
             toast.error('Failed to move task');
         }
     };

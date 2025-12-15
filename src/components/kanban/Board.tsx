@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getAllTagsWithColors, getLightTagColor, getTagColor } from '@/lib/tags';
 import {
   DndContext,
@@ -120,10 +120,11 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     
     // Helper function to map UI column IDs to database status values
     // UI uses 'in-progress' (hyphen), DB uses 'in_progress' (underscore)
-    const mapListIdToStatus = (listId: string): string => {
+    // Memoized to avoid recreation on every render
+    const mapListIdToStatus = useCallback((listId: string): string => {
         if (listId === 'in-progress') return 'in_progress';
         return listId; // 'todo' and 'done' are the same
-    };
+    }, []);
     
     // Detect mobile breakpoint and disable DND on mobile
     useEffect(() => {
@@ -161,32 +162,35 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         keyboardSensor
     );
     
-    // Filter tasks by selected tag
-    const filteredTasks = selectedTag
-        ? tasks.filter((task: any) => 
+    // Memoize filtered tasks to avoid recalculating on every render
+    const filteredTasks = useMemo(() => {
+        if (!selectedTag) return tasks;
+        return tasks.filter((task: any) => 
             task.tags?.some((tag: any) => tag.name === selectedTag)
-          )
-        : tasks;
+        );
+    }, [tasks, selectedTag]);
     
-    // Group tasks by listId
-    const tasksByList = (initialLists || []).reduce((acc: any, list: any) => {
-        const tasksForList = (filteredTasks || []).filter((task: any) => task.list_id === list.id);
-        acc[list.id] = tasksForList;
-        
-        // Debug logging
-        if (tasksForList.length > 0 || filteredTasks.length > 0) {
-            console.log(`[Board] Column "${list.id}": ${tasksForList.length} tasks`, {
-                columnId: list.id,
-                taskCount: tasksForList.length,
-                taskIds: tasksForList.map((t: any) => t.id),
-                allTaskListIds: filteredTasks.map((t: any) => ({ id: t.id, list_id: t.list_id, status: t.status }))
-            });
-        }
-        
-        return acc;
-    }, {});
+    // Memoize task grouping to avoid recalculating on every render
+    const tasksByList = useMemo(() => {
+        const grouped = (initialLists || []).reduce((acc: any, list: any) => {
+            const tasksForList = (filteredTasks || []).filter((task: any) => task.list_id === list.id);
+            acc[list.id] = tasksForList;
+            
+            // Debug logging (only in development)
+            if (process.env.NODE_ENV === 'development' && (tasksForList.length > 0 || filteredTasks.length > 0)) {
+                console.log(`[Board] Column "${list.id}": ${tasksForList.length} tasks`, {
+                    columnId: list.id,
+                    taskCount: tasksForList.length,
+                    taskIds: tasksForList.map((t: any) => t.id)
+                });
+            }
+            
+            return acc;
+        }, {});
+        return grouped;
+    }, [filteredTasks, initialLists]);
 
-    const handleCreateTask = async (newTask: any) => {
+    const handleCreateTask = useCallback(async (newTask: any) => {
         try {
             // Map list_id to status for database
             const listId = newTask.list_id || 'todo';
@@ -209,13 +213,19 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             toast.success('Task created successfully');
             // Refresh tasks from database
             if (onTasksChange) {
-                // onTasksChange can be either a refresh function or state updater
+                // onTasksChange is now always a refresh function
                 if (typeof onTasksChange === 'function' && onTasksChange.length === 0) {
                     await (onTasksChange as () => Promise<void>)();
                 } else {
-                    // For backward compatibility, if it's the old signature, trigger refresh by calling with empty array
-                    // The parent will handle the refresh
-                    window.location.reload(); // Simple refresh for now
+                    // Fallback: try to call as refresh function anyway
+                    try {
+                        await (onTasksChange as () => Promise<void>)();
+                    } catch {
+                        // If that fails, refresh tasks manually
+                        if (onRefreshTasks) {
+                            await onRefreshTasks();
+                        }
+                    }
                 }
             }
             
@@ -228,7 +238,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         }
     };
 
-    const handleUpdateTask = async (updatedTask: any) => {
+    const handleUpdateTask = useCallback(async (updatedTask: any) => {
         try {
             // Map list_id to status for database
             const listId = updatedTask.list_id || updatedTask.status || 'todo';
@@ -260,9 +270,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             console.error('Error updating task:', error);
             toast.error('Failed to update task');
         }
-    };
+    }, [mapListIdToStatus, onTasksChange]);
 
-    const handleDeleteTask = async (taskId: string) => {
+    const handleDeleteTask = useCallback(async (taskId: string) => {
         // Find the task to get its calendar event IDs
         const task = tasks.find((t: any) => t.id === taskId);
         
@@ -319,15 +329,95 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             }
             toast.error('Failed to delete task');
         }
-    };
+    }, [tasks, updateTasks, onTasksChange]);
 
-    const handleDragStart = (event: any) => {
+    // Define calendar event handlers first (used by handleDragEnd)
+    const handleDeleteCalendarEvents = useCallback(async (eventIds: string[]): Promise<boolean> => {
+        const accessToken = localStorage.getItem('google_calendar_token');
+        if (!accessToken) {
+            console.warn('[DRAG] No access token for deleting events');
+            return false;
+        }
+
+        console.log('[DRAG] Deleting calendar events:', eventIds);
+        let successCount = 0;
+
+        for (const eventId of eventIds) {
+            try {
+                const response = await fetch(
+                    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                        },
+                    }
+                );
+
+                if (response.ok) {
+                    console.log('[DRAG] ✅ Deleted event:', eventId);
+                    successCount++;
+                } else {
+                    const errorText = await response.text();
+                    console.error('[DRAG] Failed to delete event:', eventId, errorText);
+                }
+            } catch (error) {
+                console.error('[DRAG] Error deleting event:', error);
+            }
+        }
+
+        return successCount > 0;
+    }, []);
+
+    const handleRescheduleTask = useCallback(async (task: any): Promise<boolean> => {
+        const accessToken = localStorage.getItem('google_calendar_token');
+        const refreshToken = localStorage.getItem('google_calendar_refresh_token');
+        
+        if (!accessToken) {
+            console.warn('[DRAG] No access token for re-scheduling task');
+            return false;
+        }
+
+        try {
+            // Get working hours from localStorage
+            const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
+            const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
+
+            const { scheduleTask } = await import('@/app/actions');
+            const result = await scheduleTask(
+                {
+                    id: task.id,
+                    title: task.title,
+                    duration: task.duration,
+                    dueDate: task.dueDate,
+                    list_id: task.list_id || 'todo'
+                },
+                accessToken,
+                refreshToken || undefined,
+                workingHoursStart,
+                workingHoursEnd
+            );
+
+            if (result.success) {
+                console.log('[DRAG] ✅ Task re-scheduled successfully');
+                return true;
+            } else {
+                console.error('[DRAG] Failed to re-schedule task:', result.message);
+                return false;
+            }
+        } catch (error) {
+            console.error('[DRAG] Error re-scheduling task:', error);
+            return false;
+        }
+    }, []);
+
+    const handleDragStart = useCallback((event: any) => {
         const { active } = event;
         const task = tasks.find((t: any) => t.id === active.id);
         setActiveTask(task);
-    };
+    }, [tasks]);
 
-    const handleDragEnd = async (event: DragEndEvent) => {
+    const handleDragEnd = useCallback(async (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveTask(null);
 
@@ -433,91 +523,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 console.error('[DRAG] Error re-scheduling task:', error);
             });
         }
-    };
-
-    const handleDeleteCalendarEvents = async (eventIds: string[]): Promise<boolean> => {
-        const accessToken = localStorage.getItem('google_calendar_token');
-        if (!accessToken) {
-            console.warn('[DRAG] No access token for deleting events');
-            return false;
-        }
-
-        console.log('[DRAG] Deleting calendar events:', eventIds);
-        let successCount = 0;
-
-        for (const eventId of eventIds) {
-            try {
-                const response = await fetch(
-                    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-                    {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`,
-                        },
-                    }
-                );
-
-                if (response.ok) {
-                    console.log('[DRAG] ✅ Deleted event:', eventId);
-                    successCount++;
-                } else {
-                    const errorText = await response.text();
-                    console.error('[DRAG] Failed to delete event:', eventId, errorText);
-                }
-            } catch (error) {
-                console.error('[DRAG] Error deleting event:', error);
-            }
-        }
-
-        return successCount > 0;
-    };
-
-    const handleRescheduleTask = async (task: any): Promise<boolean> => {
-        const accessToken = localStorage.getItem('google_calendar_token');
-        const refreshToken = localStorage.getItem('google_calendar_refresh_token');
-        
-        if (!accessToken || !task.duration) {
-            console.warn('[DRAG] Cannot re-schedule: missing token or duration');
-            return false;
-        }
-
-        console.log('[DRAG] Re-scheduling task:', task.title);
-
-        try {
-            // Get working hours from localStorage
-            const workingHoursStart = localStorage.getItem('working_hours_start') || '09:00';
-            const workingHoursEnd = localStorage.getItem('working_hours_end') || '18:00';
-
-            const { scheduleTask } = await import('@/app/actions');
-            const result = await scheduleTask(
-                {
-                    id: task.id,
-                    title: task.title,
-                    duration: task.duration,
-                    dueDate: task.dueDate,
-                    list_id: task.list_id
-                },
-                accessToken,
-                refreshToken || undefined,
-                workingHoursStart,
-                workingHoursEnd
-            );
-
-            if (result.success && result.eventIds) {
-                // Update task with new event IDs using functional update to get latest state
-                updateTasks((currentTasks) => {
-                    const updatedTask = { ...task, googleEventIds: result.eventIds };
-                    return currentTasks.map(t => t.id === task.id ? updatedTask : t);
-                });
-                console.log('[DRAG] ✅ Re-scheduled task with events:', result.eventIds);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('[DRAG] Error re-scheduling task:', error);
-            return false;
-        }
-    };
+    }, [tasks, mapListIdToStatus, initialLists, updateTasks, handleDeleteCalendarEvents, handleRescheduleTask]);
 
     // Get managed tags from localStorage (synced across app)
     // Start with empty array to match server render, load after mount

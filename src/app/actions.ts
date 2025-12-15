@@ -32,33 +32,29 @@ export async function getTasks() {
     return { error: error.message, tasks: [] }
   }
 
-  // Fetch tags for all tasks separately
   const taskIds = (tasks || []).map(t => t.id)
-  let tagsMap: Record<string, any[]> = {}
+  
+  // Fetch tags in parallel (only if we have tasks)
+  let tagsMap: Record<string, any[]> = {};
   
   if (taskIds.length > 0) {
     const { data: tags, error: tagsError } = await supabase
       .from('tags')
       .select('task_id, name, color')
-      .in('task_id', taskIds)
+      .in('task_id', taskIds);
 
     if (!tagsError && tags) {
-      // Group tags by task_id
+      // Group tags by task_id (more efficient single pass)
       tags.forEach((tag: any) => {
         if (!tagsMap[tag.task_id]) {
-          tagsMap[tag.task_id] = []
+          tagsMap[tag.task_id] = [];
         }
         tagsMap[tag.task_id].push({
           name: tag.name,
           color: tag.color || 'bg-gray-100 text-gray-700'
-        })
-      })
+        });
+      });
     }
-  }
-
-  if (error) {
-    console.error('Error fetching tasks:', error)
-    return { error: error.message, tasks: [] }
   }
 
   // Transform tasks to match the app's expected format
