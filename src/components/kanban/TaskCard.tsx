@@ -25,9 +25,10 @@ interface TaskCardProps {
     allTags?: string[] // All existing tags from all tasks
     columnId?: string // The column this task is in (for quick actions)
     onMoveTask?: (task: any) => void // Handler for moving tasks between columns
+    onRefreshTasks?: () => Promise<void> // Direct refresh function for quick actions
 }
 
-export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMoveTask }: TaskCardProps) {
+export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMoveTask, onRefreshTasks }: TaskCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isScheduling, setIsScheduling] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -256,7 +257,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
     const handleQuickAction = async (e: React.MouseEvent | React.TouchEvent) => {
         e.stopPropagation(); // Prevent opening edit dialog
         
-        if (!onMoveTask || !columnId) return;
+        if (!columnId) return;
 
         let newStatus: string;
         let newListId: string;
@@ -278,7 +279,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             return; // Unknown column
         }
 
-        // Update task status
+        // Update task status directly
         try {
             const { updateTaskStatus } = await import('@/app/actions');
             const result = await updateTaskStatus(task.id, newStatus);
@@ -286,22 +287,23 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             if (result.error) {
                 toast.error(result.error);
             } else {
-                // Update task with new status and list_id, then trigger refresh via onMoveTask
-                const updatedTask = {
-                    ...task,
-                    status: newStatus,
-                    list_id: newListId,
-                    // Ensure all required fields are present
-                    title: task.title,
-                    description: task.description,
-                    dueDate: task.dueDate,
-                    duration: task.duration,
-                    tags: task.tags || []
-                };
-                
-                // Call onMoveTask which will trigger refresh in Board component
-                if (onMoveTask) {
-                    onMoveTask(updatedTask);
+                // Refresh tasks directly instead of going through updateTask
+                // This avoids double-updating and ensures the task appears in the new column
+                if (onRefreshTasks) {
+                    await onRefreshTasks();
+                } else if (onMoveTask) {
+                    // Fallback: use onMoveTask if onRefreshTasks is not available
+                    const updatedTask = {
+                        ...task,
+                        status: newStatus,
+                        list_id: newListId,
+                        title: task.title,
+                        description: task.description,
+                        dueDate: task.dueDate,
+                        duration: task.duration,
+                        tags: task.tags || []
+                    };
+                    await onMoveTask(updatedTask);
                 }
                 
                 toast.success('Task moved');

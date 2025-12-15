@@ -30,9 +30,10 @@ interface BoardProps {
     onSelectTag?: (tagName: string | undefined) => void // Add tag selection handler
     createDialogOpen?: boolean // External control of create dialog (for keyboard shortcuts)
     onCreateDialogOpenChange?: (open: boolean) => void // Callback when create dialog state changes
+    onRefreshTasks?: () => Promise<void> // Direct refresh function for quick actions
 }
 
-export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag, createDialogOpen: externalCreateDialogOpen, onCreateDialogOpenChange }: BoardProps) {
+export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag, createDialogOpen: externalCreateDialogOpen, onCreateDialogOpenChange, onRefreshTasks }: BoardProps) {
     const [tasks, setTasks] = useState(initialTasks);
     const skipSyncRef = useRef(false);
     const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);

@@ -255,6 +255,7 @@ export default function UnifiedViewPage() {
               onSelectTag={setSelectedTag}
               createDialogOpen={createDialogOpen}
               onCreateDialogOpenChange={setCreateDialogOpen}
+              onRefreshTasks={refreshTasks}
             />
           )}
       </main>

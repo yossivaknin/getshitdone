@@ -17,9 +17,10 @@ interface ColumnProps {
     allTags?: string[] // All existing tags from all tasks
     createDialogOpen?: boolean // Controlled open state for keyboard shortcut
     onCreateDialogOpenChange?: (open: boolean) => void // Callback for open state changes
+    onRefreshTasks?: () => Promise<void> // Direct refresh function for quick actions
 }
 
-export function Column({ title, tasks, id, workspaceId, onCreateTask, onUpdateTask, onDeleteTask, allTags = [], createDialogOpen, onCreateDialogOpenChange }: ColumnProps) {
+export function Column({ title, tasks, id, workspaceId, onCreateTask, onUpdateTask, onDeleteTask, allTags = [], createDialogOpen, onCreateDialogOpenChange, onRefreshTasks }: ColumnProps) {
     const { setNodeRef } = useDroppable({
         id: id,
     });
@@ -95,6 +96,7 @@ export function Column({ title, tasks, id, workspaceId, onCreateTask, onUpdateTa
                                 allTags={allTags}
                                 columnId={id}
                                 onMoveTask={onUpdateTask}
+                                onRefreshTasks={onRefreshTasks}
                             />
                         ))
                     )}
