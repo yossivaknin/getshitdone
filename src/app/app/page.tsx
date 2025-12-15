@@ -10,6 +10,7 @@ import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
 import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 
 // Kanban columns (these are the status columns - unified across all lists)
 const kanbanColumns = [
