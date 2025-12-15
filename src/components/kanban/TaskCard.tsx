@@ -295,7 +295,12 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 console.error('[QuickAction] Error updating status:', result.error);
                 toast.error(result.error);
             } else {
-                console.log('[QuickAction] Status updated successfully, refreshing tasks...');
+                console.log('[QuickAction] Status updated successfully, waiting a moment for DB commit...');
+                
+                // Small delay to ensure database commit is complete
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                console.log('[QuickAction] Refreshing tasks...');
                 
                 // Refresh tasks directly instead of going through updateTask
                 // This avoids double-updating and ensures the task appears in the new column
