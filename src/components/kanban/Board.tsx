@@ -211,7 +211,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             toast.error('Failed to create task');
             return null;
         }
-    };
+    }, [mapListIdToStatus, onTasksChange, onRefreshTasks]);
 
     const handleUpdateTask = useCallback(async (updatedTask: any) => {
         try {
