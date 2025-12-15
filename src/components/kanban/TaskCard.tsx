@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, Clock, User, CalendarCheck, GripVertical, Trash2, ChevronRight, CheckCircle, RotateCcw } from 'lucide-react'
@@ -32,6 +32,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
     const [isScheduling, setIsScheduling] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const touchStartRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
 
@@ -43,6 +44,16 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
         transition,
         isDragging,
     } = useSortable({ id: task.id });
+
+    // Detect mobile breakpoint
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 768); // md breakpoint
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -287,11 +298,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
 
     // Determine which quick action button to show (mobile only)
     const getQuickActionButton = () => {
-        if (!columnId || typeof window === 'undefined') return null;
-        
-        // Only show on mobile (below md breakpoint)
-        const isMobile = window.innerWidth < 768;
-        if (!isMobile) return null;
+        if (!columnId || !isMobile) return null;
 
         if (columnId === 'todo') {
             // QUEUE: Show Play button (ChevronRight)
