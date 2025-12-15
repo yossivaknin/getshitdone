@@ -374,12 +374,12 @@ export function findFreeSlots(
   };
   
   // Start from NOW or timeMin, whichever is later (don't schedule in the past!)
-  const now = new Date();
-  const startFrom = timeMin > now ? timeMin : now;
+  const nowTime = new Date();
+  const startFrom = timeMin > nowTime ? timeMin : nowTime;
   let currentDate = new Date(startFrom);
   
   // Get local time components for comparison
-  const nowLocal = getLocalTime(now);
+  const nowLocal = getLocalTime(nowTime);
   const currentLocal = getLocalTime(currentDate);
   
   // ALWAYS ensure we start at working hours, regardless of input time
@@ -389,7 +389,7 @@ export function findFreeSlots(
       currentLocal.day === nowLocal.day) {
     // Today - start from now or working hours start, whichever is later
     const todayStart = createDateInUserTimezone(currentDate, startHour, startMin);
-    currentDate = todayStart > now ? todayStart : now;
+    currentDate = todayStart > nowTime ? todayStart : nowTime;
     
     // Get current local time after adjustment
     const currentLocalAfter = getLocalTime(currentDate);
@@ -423,10 +423,9 @@ export function findFreeSlots(
   
   const endDate = createDateInUserTimezone(timeMax, endHour, endMin);
   
-  const now = new Date();
   console.log('[FREESLOTS] ========== FINDING FREE SLOTS ==========');
-  console.log('[FREESLOTS] Current time (UTC):', now.toISOString());
-  console.log('[FREESLOTS] Current time (local):', now.toLocaleString());
+  console.log('[FREESLOTS] Current time (UTC):', nowTime.toISOString());
+  console.log('[FREESLOTS] Current time (local):', nowTime.toLocaleString());
   console.log('[FREESLOTS] Working hours (from parameters):', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
   console.log('[FREESLOTS] ========== TIMEZONE DEBUG ==========');
   console.log('[FREESLOTS] Timezone parameter received:', timezone);
