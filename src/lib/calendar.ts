@@ -453,7 +453,7 @@ export function findFreeSlots(
   while (currentDate < endDate && daysChecked < maxDays) {
     // CRITICAL: Always ensure we're starting at the beginning of working hours for this day
     // Use user's timezone for all comparisons
-    const currentLocal = getLocalTime(currentDate);
+    let currentLocal = getLocalTime(currentDate);
     const dayStart = createDateInUserTimezone(currentDate, startHour, startMin);
     const dayEnd = createDateInUserTimezone(currentDate, endHour, endMin);
     
@@ -625,10 +625,10 @@ export function findFreeSlots(
     const nextSlotLocal = getLocalTime(nextSlotDT.toJSDate());
     const nextSlotTime = nextSlotLocal.hour * 60 + nextSlotLocal.minute;
     const workingEndTime = endHour * 60 + endMin;
-    const currentLocal = getLocalTime(currentDate);
+    const currentLocalForNextSlot = getLocalTime(currentDate);
     
     // Check if next slot is past working hours or different day
-    if (nextSlotTime > workingEndTime || nextSlotLocal.day !== currentLocal.day) {
+    if (nextSlotTime > workingEndTime || nextSlotLocal.day !== currentLocalForNextSlot.day) {
       // Move to next day's start in user's timezone
       const nextDayDT = currentDT.plus({ days: 1 }).set({ hour: startHour, minute: startMin, second: 0, millisecond: 0 });
       currentDate = nextDayDT.toJSDate();
