@@ -103,15 +103,25 @@ export default function UnifiedViewPage() {
   // Refresh tasks when needed (after create/update/delete)
   const refreshTasks = async () => {
     try {
+      console.log('[App] Refreshing tasks...');
       const result = await getTasks();
       if (result.error) {
-        console.error('Error refreshing tasks:', result.error);
+        console.error('[App] Error refreshing tasks:', result.error);
         toast.error('Failed to refresh tasks');
       } else {
+        console.log('[App] Tasks refreshed:', {
+          count: result.tasks?.length || 0,
+          tasks: result.tasks?.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            list_id: t.list_id
+          }))
+        });
         setTasks(result.tasks || []);
       }
     } catch (error) {
-      console.error('Error refreshing tasks:', error);
+      console.error('[App] Exception refreshing tasks:', error);
       toast.error('Failed to refresh tasks');
     }
   };

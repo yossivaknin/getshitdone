@@ -170,7 +170,19 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     
     // Group tasks by listId
     const tasksByList = (initialLists || []).reduce((acc: any, list: any) => {
-        acc[list.id] = (filteredTasks || []).filter((task: any) => task.list_id === list.id);
+        const tasksForList = (filteredTasks || []).filter((task: any) => task.list_id === list.id);
+        acc[list.id] = tasksForList;
+        
+        // Debug logging
+        if (tasksForList.length > 0 || filteredTasks.length > 0) {
+            console.log(`[Board] Column "${list.id}": ${tasksForList.length} tasks`, {
+                columnId: list.id,
+                taskCount: tasksForList.length,
+                taskIds: tasksForList.map((t: any) => t.id),
+                allTaskListIds: filteredTasks.map((t: any) => ({ id: t.id, list_id: t.list_id, status: t.status }))
+            });
+        }
+        
         return acc;
     }, {});
 

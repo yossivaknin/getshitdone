@@ -281,17 +281,30 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
 
         // Update task status directly
         try {
+            console.log('[QuickAction] Moving task:', {
+                taskId: task.id,
+                fromColumn: columnId,
+                toStatus: newStatus,
+                toListId: newListId
+            });
+            
             const { updateTaskStatus } = await import('@/app/actions');
             const result = await updateTaskStatus(task.id, newStatus);
             
             if (result.error) {
+                console.error('[QuickAction] Error updating status:', result.error);
                 toast.error(result.error);
             } else {
+                console.log('[QuickAction] Status updated successfully, refreshing tasks...');
+                
                 // Refresh tasks directly instead of going through updateTask
                 // This avoids double-updating and ensures the task appears in the new column
                 if (onRefreshTasks) {
+                    console.log('[QuickAction] Calling onRefreshTasks...');
                     await onRefreshTasks();
+                    console.log('[QuickAction] Refresh completed');
                 } else if (onMoveTask) {
+                    console.log('[QuickAction] Using onMoveTask fallback...');
                     // Fallback: use onMoveTask if onRefreshTasks is not available
                     const updatedTask = {
                         ...task,
@@ -304,12 +317,16 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                         tags: task.tags || []
                     };
                     await onMoveTask(updatedTask);
+                } else {
+                    console.warn('[QuickAction] No refresh method available!');
+                    // Force a page reload as last resort
+                    window.location.reload();
                 }
                 
                 toast.success('Task moved');
             }
         } catch (error) {
-            console.error('Quick action error:', error);
+            console.error('[QuickAction] Exception:', error);
             toast.error('Failed to move task');
         }
     };
