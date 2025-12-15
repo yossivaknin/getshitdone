@@ -27,6 +27,7 @@ interface BoardProps {
     selectedTag?: string
     onTasksChange?: (tasks: any[]) => void
     allTags?: string[] // All existing tags from all tasks
+    allTagsWithColors?: { name: string; color: string }[] // Pre-loaded tags with colors (for performance)
     onSelectTag?: (tagName: string | undefined) => void // Add tag selection handler
     createDialogOpen?: boolean // External control of create dialog (for keyboard shortcuts)
     onCreateDialogOpenChange?: (open: boolean) => void // Callback when create dialog state changes
