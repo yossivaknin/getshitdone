@@ -81,9 +81,16 @@ export async function getTasks() {
     // Use tags from separate table if available, otherwise use array column
     const finalTags = taskTags.length > 0 ? taskTags : arrayColumnTags
     
+    // Map database status to UI list_id (convert 'in_progress' to 'in-progress')
+    const mapStatusToListId = (status: string): string => {
+      if (status === 'in_progress') return 'in-progress';
+      return status || 'todo'; // 'todo' and 'done' are the same
+    };
+    
     return {
       id: task.id,
-      list_id: task.status || 'todo', // Map status to list_id for kanban columns
+      list_id: mapStatusToListId(task.status || 'todo'), // Map status to list_id for kanban columns
+      status: task.status || 'todo', // Also include status for reference
       title: task.title,
       description: task.description,
       tags: finalTags,
