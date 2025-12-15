@@ -577,7 +577,7 @@ export async function scheduleTask(
 
     // Get busy slots from now until due date
     // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings
-    const now = new Date()
+    // Note: 'now' is already defined above, reuse it
     let busySlots: TimeSlot[] = []
     
     try {
