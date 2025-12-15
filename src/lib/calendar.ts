@@ -418,7 +418,9 @@ export function findFreeSlots(
   
   console.log('[FREESLOTS] ========== FINDING FREE SLOTS ==========');
   console.log('[FREESLOTS] Working hours (from parameters):', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
-  console.log('[FREESLOTS] User timezone:', timeZone);
+  console.log('[FREESLOTS] Timezone parameter received:', timezone);
+  console.log('[FREESLOTS] Using timezone:', timeZone);
+  console.log('[FREESLOTS] Server timezone would be:', Intl.DateTimeFormat().resolvedOptions().timeZone);
   console.log('[FREESLOTS] Searching from:', currentDate.toISOString(), 'to', endDate.toISOString());
   const startLocal = getLocalTime(currentDate);
   const endLocal = getLocalTime(endDate);
