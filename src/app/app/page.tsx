@@ -300,18 +300,19 @@ export default function UnifiedViewPage() {
               <p className="text-gray-500 font-mono">Loading tasks...</p>
             </div>
           ) : (
-            <Board 
-              lists={kanbanColumns} 
-              tasks={tasks}
-              workspaceId="user-workspace"
-              selectedTag={selectedTag}
-              onTasksChange={refreshTasks as any}
-              allTags={allTags}
-              onSelectTag={setSelectedTag}
-              createDialogOpen={createDialogOpen}
-              onCreateDialogOpenChange={setCreateDialogOpen}
-              onRefreshTasks={refreshTasks}
-            />
+                <Board 
+                  lists={kanbanColumns} 
+                  tasks={tasks}
+                  workspaceId="user-workspace"
+                  selectedTag={selectedTag}
+                  onTasksChange={refreshTasks as any}
+                  allTags={allTags}
+                  allTagsWithColors={allTagsWithColors}
+                  onSelectTag={setSelectedTag}
+                  createDialogOpen={createDialogOpen}
+                  onCreateDialogOpenChange={setCreateDialogOpen}
+                  onRefreshTasks={refreshTasks}
+                />
           )}
       </main>
 

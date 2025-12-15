@@ -33,7 +33,7 @@ interface BoardProps {
     onRefreshTasks?: () => Promise<void> // Direct refresh function for quick actions
 }
 
-export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], onSelectTag, createDialogOpen: externalCreateDialogOpen, onCreateDialogOpenChange, onRefreshTasks }: BoardProps) {
+export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, selectedTag, onTasksChange, allTags = [], allTagsWithColors: preloadedTags, onSelectTag, createDialogOpen: externalCreateDialogOpen, onCreateDialogOpenChange, onRefreshTasks }: BoardProps) {
     const [tasks, setTasks] = useState(initialTasks);
     const skipSyncRef = useRef(false);
     const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);
@@ -500,15 +500,23 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         }
     }, [tasks, mapListIdToStatus, initialLists, updateTasks, handleDeleteCalendarEvents, handleRescheduleTask]);
 
-    // Get tags from database (synced across devices)
-    // Start with empty array to match server render, load after mount
-    const [allTagsWithColors, setAllTagsWithColors] = useState<{ name: string; color: string }[]>([]);
+    // Get tags from props (pre-loaded) or load from cache/database
+    // Start with preloaded tags if available, otherwise empty array
+    const [allTagsWithColors, setAllTagsWithColors] = useState<{ name: string; color: string }[]>(preloadedTags || []);
     const [isMounted, setIsMounted] = useState(false);
-    const [isLoadingTags, setIsLoadingTags] = useState(true);
+    const [isLoadingTags, setIsLoadingTags] = useState(!preloadedTags || preloadedTags.length === 0);
     
     useEffect(() => {
         // Mark as mounted to prevent hydration mismatch
         setIsMounted(true);
+        
+        // If we have preloaded tags, use them immediately (no loading needed)
+        if (preloadedTags && preloadedTags.length > 0) {
+            console.log('[Board] Using preloaded tags:', preloadedTags.length);
+            setAllTagsWithColors(preloadedTags);
+            setIsLoadingTags(false);
+            return;
+        }
         
         const loadTags = async () => {
             setIsLoadingTags(true);
@@ -517,7 +525,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
                 const cachedTags = getCachedTags();
                 
-                if (cachedTags) {
+                if (cachedTags && cachedTags.length > 0) {
                     console.log('[Board] Using cached tags:', cachedTags.length);
                     // Still need to combine with task tags
                     const taskTagsMap = new Map<string, { name: string; color: string }>();
@@ -660,7 +668,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         return () => {
             window.removeEventListener('tagsUpdated', handleTagUpdate);
         };
-    }, [tasks]); // Re-run when tasks change to pick up new tags
+    }, [tasks, preloadedTags]); // Re-run when tasks or preloaded tags change
 
     return (
         <DndContext
