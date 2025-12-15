@@ -299,6 +299,7 @@ export function findFreeSlots(
   const startFrom = timeMin > now ? timeMin : now;
   let currentDate = new Date(startFrom);
   
+  // ALWAYS ensure we start at working hours, regardless of input time
   // If we're starting today, set to working hours start, but don't go back in time
   if (currentDate.getDate() === now.getDate() && 
       currentDate.getMonth() === now.getMonth() && 
@@ -311,9 +312,25 @@ export function findFreeSlots(
     const minutes = currentDate.getMinutes();
     const roundedMinutes = Math.ceil(minutes / 15) * 15;
     currentDate.setMinutes(roundedMinutes, 0, 0);
+    
+    // CRITICAL: If rounded time is still before working hours start, move to start
+    const todayWorkingStart = new Date(currentDate);
+    todayWorkingStart.setHours(startHour, startMin, 0, 0);
+    if (currentDate < todayWorkingStart) {
+      currentDate = new Date(todayWorkingStart);
+    }
+    
+    // CRITICAL: If current time is after working hours end, move to next day's start
+    const todayWorkingEnd = new Date(currentDate);
+    todayWorkingEnd.setHours(endHour, endMin, 0, 0);
+    if (currentDate >= todayWorkingEnd) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(startHour, startMin, 0, 0);
+    }
   } else {
-    // Future date - start from working hours
+    // Future date - ALWAYS start from working hours start
     currentDate.setHours(startHour, startMin, 0, 0);
+    currentDate.setMinutes(0, 0, 0);
   }
   
   const endDate = new Date(timeMax);
@@ -341,22 +358,27 @@ export function findFreeSlots(
   let daysChecked = 0;
   
   while (currentDate < endDate && daysChecked < maxDays) {
-    // Ensure we're starting at the beginning of working hours for this day
+    // CRITICAL: Always ensure we're starting at the beginning of working hours for this day
     const dayStart = new Date(currentDate);
     dayStart.setHours(startHour, startMin, 0, 0);
+    dayStart.setMinutes(0, 0, 0);
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(endHour, endMin, 0, 0);
+    dayEnd.setMinutes(0, 0, 0);
     
     // If current time is before working hours start, move to start
     if (currentDate < dayStart) {
       currentDate = new Date(dayStart);
+      console.log(`[FREESLOTS] Adjusted to working hours start: ${currentDate.toISOString()}`);
     }
     
     // If current time is after working hours end, move to next day
     if (currentDate >= dayEnd) {
       currentDate.setDate(currentDate.getDate() + 1);
       currentDate.setHours(startHour, startMin, 0, 0);
+      currentDate.setMinutes(0, 0, 0);
       daysChecked++;
+      console.log(`[FREESLOTS] Moved to next day's working hours start: ${currentDate.toISOString()}`);
       continue;
     }
     
@@ -430,18 +452,27 @@ export function findFreeSlots(
     }
     
     if (slotEnd <= endDate) {
-      // Double-check that the slot is within working hours
+      // CRITICAL: Double-check that the slot is within working hours
       const finalStartHour = currentDate.getHours();
       const finalStartMin = currentDate.getMinutes();
       const finalEndHour = slotEnd.getHours();
       const finalEndMin = slotEnd.getMinutes();
       
+      // Strict validation: slot must be completely within working hours
       const isValidStart = finalStartHour > startHour || 
         (finalStartHour === startHour && finalStartMin >= startMin);
       const isValidEnd = finalEndHour < endHour || 
         (finalEndHour === endHour && finalEndMin <= endMin);
       
-      if (isValidStart && isValidEnd) {
+      // Additional check: ensure slot doesn't span across working hours boundary
+      const slotStartTime = finalStartHour * 60 + finalStartMin;
+      const slotEndTime = finalEndHour * 60 + finalEndMin;
+      const workingStartTime = startHour * 60 + startMin;
+      const workingEndTime = endHour * 60 + endMin;
+      
+      const isWithinWorkingHours = slotStartTime >= workingStartTime && slotEndTime <= workingEndTime;
+      
+      if (isValidStart && isValidEnd && isWithinWorkingHours) {
         // TRIPLE-CHECK: Verify no conflicts one more time before adding
         const finalCheckConflict = sortedBusy.some(busy => {
           const busyStart = busy.start.getTime();
@@ -473,13 +504,37 @@ export function findFreeSlots(
         console.warn(`[FREESLOTS] ❌ Slot rejected - outside working hours:`, {
           start: `${finalStartHour}:${finalStartMin}`,
           end: `${finalEndHour}:${finalEndMin}`,
-          workingHours: `${startHour}:${startMin} - ${endHour}:${endMin}`
+          workingHours: `${startHour}:${startMin} - ${endHour}:${endMin}`,
+          isWithinWorkingHours: isWithinWorkingHours
         });
+        // If slot is outside working hours, move to next day's start instead of incrementing
+        if (!isWithinWorkingHours) {
+          currentDate.setDate(currentDate.getDate() + 1);
+          currentDate.setHours(startHour, startMin, 0, 0);
+          currentDate.setMinutes(0, 0, 0);
+          daysChecked++;
+          continue;
+        }
       }
     }
     
     // Move to next potential slot (15-minute increments for efficiency)
-    currentDate = new Date(currentDate.getTime() + 15 * 60 * 1000);
+    // But ensure we don't go past working hours
+    const nextSlot = new Date(currentDate.getTime() + 15 * 60 * 1000);
+    const nextSlotHour = nextSlot.getHours();
+    const nextSlotMin = nextSlot.getMinutes();
+    const nextSlotTime = nextSlotHour * 60 + nextSlotMin;
+    const workingEndTime = endHour * 60 + endMin;
+    
+    if (nextSlotTime > workingEndTime || nextSlot.getDate() !== currentDate.getDate()) {
+      // Move to next day's start
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(startHour, startMin, 0, 0);
+      currentDate.setMinutes(0, 0, 0);
+      daysChecked++;
+    } else {
+      currentDate = nextSlot;
+    }
     
     // If we've moved past end of day, go to next day
     if (currentDate.getHours() >= endHour && currentDate.getMinutes() >= endMin) {
