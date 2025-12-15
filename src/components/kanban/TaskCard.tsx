@@ -367,7 +367,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                         handleQuickAction(e);
                     }}
                     className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95 z-10 relative"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
                     title="Execute"
                 >
                     <ChevronRight className="w-5 h-5" />
@@ -409,7 +409,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                         handleQuickAction(e);
                     }}
                     className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95 z-10 relative"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
                     title="Move to Active"
                 >
                     <RotateCcw className="w-5 h-5" />
