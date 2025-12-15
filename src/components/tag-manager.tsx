@@ -4,39 +4,66 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tag, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Tag, Plus, Edit2, Trash2, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import { getLightTagColor, type TagData, STORAGE_KEY } from '@/lib/tags';
+import { getLightTagColor, type TagData } from '@/lib/tags';
+import { getUserTags, saveUserTag, deleteUserTag } from '@/app/actions';
 
 
 export function TagManager() {
   const [tags, setTags] = useState<TagData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);
 
-  // Load tags from localStorage on mount
+  // Load tags from database on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
+    const loadTags = async () => {
+      setIsLoading(true);
       try {
-        setTags(JSON.parse(stored));
+        const { tags: dbTags, error } = await getUserTags();
+        
+        if (error) {
+          console.error('[TagManager] Error loading tags:', error);
+          toast.error('Failed to load tags');
+          setTags([]);
+        } else {
+          // Convert database tags to TagData format
+          const formattedTags: TagData[] = (dbTags || []).map((tag: any) => ({
+            id: tag.id,
+            name: tag.name,
+            color: tag.color || getLightTagColor(tag.name)
+          }));
+          setTags(formattedTags);
+          console.log('[TagManager] Loaded', formattedTags.length, 'tags from database');
+        }
       } catch (error) {
-        console.error('Error loading tags:', error);
+        console.error('[TagManager] Exception loading tags:', error);
+        toast.error('Failed to load tags');
+        setTags([]);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+    
+    loadTags();
+    
+    // Listen for tag updates from other components
+    const handleTagUpdate = () => {
+      loadTags();
+    };
+    
+    window.addEventListener('tagsUpdated', handleTagUpdate);
+    
+    return () => {
+      window.removeEventListener('tagsUpdated', handleTagUpdate);
+    };
   }, []);
 
-  // Save tags to localStorage whenever they change
-  useEffect(() => {
-    if (tags.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
-    }
-  }, [tags]);
-
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     const trimmedName = newTagName.trim();
     if (!trimmedName) {
       toast.error('Tag name cannot be empty');
@@ -49,13 +76,25 @@ export function TagManager() {
       return;
     }
 
-    const newTag: TagData = {
-      id: Date.now().toString(),
-      name: trimmedName,
-      color: getLightTagColor(trimmedName),
-    };
+    const tagColor = getLightTagColor(trimmedName);
+    const result = await saveUserTag(trimmedName, tagColor);
+    
+    if (result.error) {
+      toast.error(`Failed to create tag: ${result.error}`);
+      return;
+    }
 
-    setTags(prev => [...prev, newTag]);
+    // Reload tags from database
+    const { tags: updatedTags } = await getUserTags();
+    if (updatedTags) {
+      const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color || getLightTagColor(tag.name)
+      }));
+      setTags(formattedTags);
+    }
+    
     setNewTagName('');
     setShowNewTagInput(false);
     
@@ -70,7 +109,7 @@ export function TagManager() {
     setEditName(tag.name);
   };
 
-  const handleSaveEdit = (tagId: string) => {
+  const handleSaveEdit = async (tagId: string) => {
     const trimmedName = editName.trim();
     if (!trimmedName) {
       toast.error('Tag name cannot be empty');
@@ -83,13 +122,39 @@ export function TagManager() {
       return;
     }
 
-    setTags(prev =>
-      prev.map(tag =>
-        tag.id === tagId
-          ? { ...tag, name: trimmedName, color: getLightTagColor(trimmedName) }
-          : tag
-      )
-    );
+    const tag = tags.find(t => t.id === tagId);
+    if (!tag) {
+      toast.error('Tag not found');
+      return;
+    }
+
+    // Update tag in database
+    const tagColor = getLightTagColor(trimmedName);
+    const result = await saveUserTag(trimmedName, tagColor);
+    
+    if (result.error) {
+      toast.error(`Failed to update tag: ${result.error}`);
+      return;
+    }
+
+    // If name changed, we need to delete the old tag and create a new one
+    if (tag.name !== trimmedName) {
+      // Delete old tag
+      await deleteUserTag(tag.name);
+      // The saveUserTag already created the new one
+    }
+
+    // Reload tags from database
+    const { tags: updatedTags } = await getUserTags();
+    if (updatedTags) {
+      const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color || getLightTagColor(tag.name)
+      }));
+      setTags(formattedTags);
+    }
+    
     setEditingTag(null);
     setEditName('');
     
@@ -104,7 +169,7 @@ export function TagManager() {
     setEditName('');
   };
 
-  const handleDeleteTag = (tagId: string) => {
+  const handleDeleteTag = async (tagId: string) => {
     const tag = tags.find(t => t.id === tagId);
     if (!tag) return;
 
@@ -112,7 +177,23 @@ export function TagManager() {
       return;
     }
 
-    setTags(prev => prev.filter(t => t.id !== tagId));
+    const result = await deleteUserTag(tag.name);
+    
+    if (result.error) {
+      toast.error(`Failed to delete tag: ${result.error}`);
+      return;
+    }
+
+    // Reload tags from database
+    const { tags: updatedTags } = await getUserTags();
+    if (updatedTags) {
+      const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color || getLightTagColor(tag.name)
+      }));
+      setTags(formattedTags);
+    }
     
     // Dispatch event to notify other components
     window.dispatchEvent(new Event('tagsUpdated'));
@@ -134,7 +215,12 @@ export function TagManager() {
 
       {/* Tags List */}
       <div className="space-y-3 mb-4">
-        {tags.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin" />
+            <p>Loading tags...</p>
+          </div>
+        ) : tags.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm">
             <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>No tags yet. Create your first tag below.</p>

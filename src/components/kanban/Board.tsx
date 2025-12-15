@@ -504,12 +504,14 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     // Start with empty array to match server render, load after mount
     const [allTagsWithColors, setAllTagsWithColors] = useState<{ name: string; color: string }[]>([]);
     const [isMounted, setIsMounted] = useState(false);
+    const [isLoadingTags, setIsLoadingTags] = useState(true);
     
     useEffect(() => {
         // Mark as mounted to prevent hydration mismatch
         setIsMounted(true);
         
         const loadTags = async () => {
+            setIsLoadingTags(true);
             try {
                 // Fetch tags from database
                 const { getUserTags } = await import('@/app/actions');
@@ -520,6 +522,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     // Fallback to localStorage if database fails
                     const managedTags = getAllTagsWithColors();
                     setAllTagsWithColors(managedTags);
+                    setIsLoadingTags(false);
                     return;
                 }
                 
@@ -586,6 +589,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 // Fallback to localStorage
                 const managedTags = getAllTagsWithColors();
                 setAllTagsWithColors(managedTags);
+            } finally {
+                setIsLoadingTags(false);
             }
         };
         
