@@ -120,7 +120,9 @@ export async function testCalendarAPI(accessToken: string, refreshToken?: string
         });
 
         if (calendarListResponse.status === 404) {
-          // Extract project number from token
+          // Extract project number from token - need to get tokenInfo first
+          const tokenInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${validToken}`);
+          const tokenInfo = tokenInfoResponse.ok ? await tokenInfoResponse.json() : { audience: null };
           const projectNumber = tokenInfo.audience?.split('-')[0] || 'unknown';
           
           // Check if it's an HTML 404 (API not accessible) vs JSON 404
