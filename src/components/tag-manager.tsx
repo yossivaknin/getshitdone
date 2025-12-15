@@ -19,11 +19,28 @@ export function TagManager() {
   const [newTagName, setNewTagName] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);
 
-  // Load tags from database on mount
+  // Load tags from database on mount (with cache)
   useEffect(() => {
     const loadTags = async () => {
       setIsLoading(true);
       try {
+        // Check cache first
+        const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
+        const cachedTags = getCachedTags();
+        
+        if (cachedTags && cachedTags.length > 0) {
+          console.log('[TagManager] Using cached tags:', cachedTags.length);
+          const formattedTags: TagData[] = cachedTags.map((tag: any) => ({
+            id: tag.id || Date.now().toString(),
+            name: tag.name,
+            color: tag.color || getLightTagColor(tag.name)
+          }));
+          setTags(formattedTags);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Cache miss - fetch from database
         const { tags: dbTags, error } = await getUserTags();
         
         if (error) {
@@ -38,7 +55,12 @@ export function TagManager() {
             color: tag.color || getLightTagColor(tag.name)
           }));
           setTags(formattedTags);
-          console.log('[TagManager] Loaded', formattedTags.length, 'tags from database');
+          
+          // Update cache
+          const cacheTags = formattedTags.map(t => ({ name: t.name, color: t.color }));
+          setCachedTags(cacheTags);
+          
+          console.log('[TagManager] Loaded and cached', formattedTags.length, 'tags from database');
         }
       } catch (error) {
         console.error('[TagManager] Exception loading tags:', error);
@@ -52,7 +74,10 @@ export function TagManager() {
     loadTags();
     
     // Listen for tag updates from other components
-    const handleTagUpdate = () => {
+    const handleTagUpdate = async () => {
+      // Clear cache and reload
+      const { clearTagsCache } = await import('@/lib/tags-cache');
+      clearTagsCache();
       loadTags();
     };
     
@@ -84,7 +109,7 @@ export function TagManager() {
       return;
     }
 
-    // Reload tags from database
+    // Reload tags from database and update cache
     const { tags: updatedTags } = await getUserTags();
     if (updatedTags) {
       const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
@@ -93,6 +118,11 @@ export function TagManager() {
         color: tag.color || getLightTagColor(tag.name)
       }));
       setTags(formattedTags);
+      
+      // Update cache
+      const { setCachedTags } = await import('@/lib/tags-cache');
+      const cacheTags = formattedTags.map(t => ({ name: t.name, color: t.color }));
+      setCachedTags(cacheTags);
     }
     
     setNewTagName('');
@@ -144,7 +174,7 @@ export function TagManager() {
       // The saveUserTag already created the new one
     }
 
-    // Reload tags from database
+    // Reload tags from database and update cache
     const { tags: updatedTags } = await getUserTags();
     if (updatedTags) {
       const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
@@ -153,6 +183,11 @@ export function TagManager() {
         color: tag.color || getLightTagColor(tag.name)
       }));
       setTags(formattedTags);
+      
+      // Update cache
+      const { setCachedTags } = await import('@/lib/tags-cache');
+      const cacheTags = formattedTags.map(t => ({ name: t.name, color: t.color }));
+      setCachedTags(cacheTags);
     }
     
     setEditingTag(null);
@@ -184,7 +219,7 @@ export function TagManager() {
       return;
     }
 
-    // Reload tags from database
+    // Reload tags from database and update cache
     const { tags: updatedTags } = await getUserTags();
     if (updatedTags) {
       const formattedTags: TagData[] = updatedTags.map((tag: any) => ({
@@ -193,6 +228,11 @@ export function TagManager() {
         color: tag.color || getLightTagColor(tag.name)
       }));
       setTags(formattedTags);
+      
+      // Update cache
+      const { setCachedTags } = await import('@/lib/tags-cache');
+      const cacheTags = formattedTags.map(t => ({ name: t.name, color: t.color }));
+      setCachedTags(cacheTags);
     }
     
     // Dispatch event to notify other components

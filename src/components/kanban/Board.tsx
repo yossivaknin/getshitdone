@@ -513,7 +513,50 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         const loadTags = async () => {
             setIsLoadingTags(true);
             try {
-                // Fetch tags from database
+                // Check cache first
+                const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
+                const cachedTags = getCachedTags();
+                
+                if (cachedTags) {
+                    console.log('[Board] Using cached tags:', cachedTags.length);
+                    // Still need to combine with task tags
+                    const taskTagsMap = new Map<string, { name: string; color: string }>();
+                    tasks.forEach((task: any) => {
+                        if (task.tags && Array.isArray(task.tags)) {
+                            task.tags.forEach((tag: any) => {
+                                const tagName = typeof tag === 'string' ? tag : tag.name;
+                                if (tagName && !taskTagsMap.has(tagName)) {
+                                    const cachedTag = cachedTags.find((t: any) => t.name === tagName);
+                                    const tagColor = typeof tag === 'object' && tag.color 
+                                        ? tag.color 
+                                        : cachedTag?.color || getTagColor(tagName);
+                                    taskTagsMap.set(tagName, {
+                                        name: tagName,
+                                        color: tagColor
+                                    });
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Combine cached tags with task tags
+                    const combinedTags = new Map<string, { name: string; color: string }>();
+                    cachedTags.forEach((tag: any) => {
+                        combinedTags.set(tag.name, tag);
+                    });
+                    taskTagsMap.forEach((tag, name) => {
+                        if (!combinedTags.has(name)) {
+                            combinedTags.set(name, tag);
+                        }
+                    });
+                    
+                    const finalTags = Array.from(combinedTags.values());
+                    setAllTagsWithColors(finalTags);
+                    setIsLoadingTags(false);
+                    return;
+                }
+                
+                // Cache miss - fetch from database
                 const { getUserTags } = await import('@/app/actions');
                 const { tags: dbTags, error } = await getUserTags();
                 
@@ -584,6 +627,13 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 const finalTags = Array.from(combinedTags.values());
                 console.log('[Board] Final combined tags:', finalTags.length, finalTags.map(t => t.name));
                 setAllTagsWithColors(finalTags);
+                
+                // Update cache with database tags (not task tags)
+                const dbTagsFormatted = dbTags.map((t: any) => ({
+                    name: t.name,
+                    color: t.color || getTagColor(t.name)
+                }));
+                setCachedTags(dbTagsFormatted);
             } catch (error) {
                 console.error('[Board] Error loading tags:', error);
                 // Fallback to localStorage
@@ -598,7 +648,10 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         loadTags();
         
         // Listen for custom events (when tags are updated)
-        const handleTagUpdate = () => {
+        const handleTagUpdate = async () => {
+            // Clear cache when tags are updated
+            const { clearTagsCache } = await import('@/lib/tags-cache');
+            clearTagsCache();
             loadTags();
         };
         

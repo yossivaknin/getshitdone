@@ -81,27 +81,61 @@ export default function UnifiedViewPage() {
     }
   }, []);
 
-  // Load tasks from database on mount
+  // Load tasks and tags from database on mount (in parallel for better performance)
   useEffect(() => {
-    const loadTasks = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       try {
-        const result = await getTasks();
-        if (result.error) {
-          console.error('Error loading tasks:', result.error);
+        // Load tasks and tags in parallel
+        const [tasksResult, { getUserTags }] = await Promise.all([
+          getTasks(),
+          import('@/app/actions')
+        ]);
+        
+        // Load tasks
+        if (tasksResult.error) {
+          console.error('Error loading tasks:', tasksResult.error);
           toast.error('Failed to load tasks');
         } else {
-          setTasks(result.tasks || []);
+          setTasks(tasksResult.tasks || []);
+        }
+        
+        // Load tags (with caching)
+        const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
+        const cachedTags = getCachedTags();
+        
+        if (cachedTags) {
+          console.log('[App] Using cached tags:', cachedTags.length);
+          setManagedTags(cachedTags);
+        } else {
+          const { tags: dbTags, error } = await getUserTags();
+          
+          if (error || !dbTags || dbTags.length === 0) {
+            // Fallback to localStorage
+            const { getAllTagsWithColors } = await import('@/lib/tags');
+            const fallbackTags = getAllTagsWithColors();
+            setManagedTags(fallbackTags);
+            setCachedTags(fallbackTags);
+          } else {
+            // Convert database tags to the format expected by the UI
+            const formattedTags = dbTags.map((t: any) => ({
+              name: t.name,
+              color: t.color || 'bg-gray-50 text-gray-600 border-gray-200'
+            }));
+            setManagedTags(formattedTags);
+            setCachedTags(formattedTags);
+            console.log('[App] Loaded and cached', formattedTags.length, 'tags from database');
+          }
         }
       } catch (error) {
-        console.error('Error loading tasks:', error);
-        toast.error('Failed to load tasks');
+        console.error('Error loading data:', error);
+        toast.error('Failed to load data');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadTasks();
+    loadData();
   }, []);
 
   // Refresh tasks when needed (after create/update/delete)
@@ -130,38 +164,36 @@ export default function UnifiedViewPage() {
     }
   };
 
-  // Load tags from database (synced across devices)
-  // Only load after mount to prevent hydration mismatch
+  // Listen for tag updates and refresh cache
   useEffect(() => {
-    const loadTags = async () => {
+    const handleTagUpdate = async () => {
       try {
-        // Load from database
+        // Clear cache and reload tags
+        const { clearTagsCache } = await import('@/lib/tags-cache');
+        clearTagsCache();
+        
         const { getUserTags } = await import('@/app/actions');
         const { tags: dbTags, error } = await getUserTags();
         
         if (error || !dbTags || dbTags.length === 0) {
           // Fallback to localStorage
-          setManagedTags(getAllTagsWithColors());
+          const fallbackTags = getAllTagsWithColors();
+          setManagedTags(fallbackTags);
         } else {
           // Convert database tags to the format expected by the UI
-          setManagedTags(dbTags.map((t: any) => ({
+          const formattedTags = dbTags.map((t: any) => ({
             name: t.name,
             color: t.color || 'bg-gray-50 text-gray-600 border-gray-200'
-          })));
+          }));
+          setManagedTags(formattedTags);
+          
+          // Update cache
+          const { setCachedTags } = await import('@/lib/tags-cache');
+          setCachedTags(formattedTags);
         }
       } catch (error) {
-        console.error('[App] Error loading tags:', error);
-        // Fallback to localStorage
-        setManagedTags(getAllTagsWithColors());
+        console.error('[App] Error refreshing tags:', error);
       }
-    };
-    
-    // Load tags immediately after mount
-    loadTags();
-    
-    // Listen for custom events (when tags are updated)
-    const handleTagUpdate = () => {
-      loadTags();
     };
     
     window.addEventListener('tagsUpdated', handleTagUpdate);
