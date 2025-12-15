@@ -512,6 +512,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         const loadTags = () => {
             // Get managed tags from localStorage
             const managedTags = getAllTagsWithColors();
+            console.log('[Board] Loaded managed tags from localStorage:', managedTags.length, managedTags);
             
             // Also extract tags from actual tasks (in case some tags aren't in managed tags)
             const taskTagsMap = new Map<string, { name: string; color: string }>();
@@ -532,6 +533,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     });
                 }
             });
+            console.log('[Board] Extracted tags from tasks:', taskTagsMap.size, Array.from(taskTagsMap.keys()));
             
             // Combine managed tags and task tags, with managed tags taking precedence for colors
             const combinedTags = new Map<string, { name: string; color: string }>();
@@ -548,7 +550,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 }
             });
             
-            setAllTagsWithColors(Array.from(combinedTags.values()));
+            const finalTags = Array.from(combinedTags.values());
+            console.log('[Board] Final combined tags:', finalTags.length, finalTags.map(t => t.name));
+            setAllTagsWithColors(finalTags);
         };
         
         // Load tags immediately after mount
