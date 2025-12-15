@@ -256,8 +256,17 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
     // Quick action handler for mobile
     const handleQuickAction = async (e: React.MouseEvent | React.TouchEvent) => {
         e.stopPropagation(); // Prevent opening edit dialog
+        e.preventDefault(); // Prevent any default behavior
         
-        if (!columnId) return;
+        // Also prevent the card click handler from firing
+        if (e.nativeEvent) {
+            e.nativeEvent.stopImmediatePropagation();
+        }
+        
+        if (!columnId) {
+            console.warn('[QuickAction] No columnId provided');
+            return;
+        }
 
         let newStatus: string;
         let newListId: string;
@@ -348,8 +357,17 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             return (
                 <button
                     onClick={handleQuickAction}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95"
+                    onTouchStart={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleQuickAction(e);
+                    }}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95 z-10 relative"
+                    style={{ pointerEvents: 'auto' }}
                     title="Execute"
                 >
                     <ChevronRight className="w-5 h-5" />
@@ -360,8 +378,17 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             return (
                 <button
                     onClick={handleQuickAction}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-md transition-all active:scale-95"
+                    onTouchStart={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleQuickAction(e);
+                    }}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-md transition-all active:scale-95 z-10 relative"
+                    style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
                     title="Mission Complete"
                 >
                     <CheckCircle className="w-5 h-5" />
@@ -372,8 +399,17 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             return (
                 <button
                     onClick={handleQuickAction}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95"
+                    onTouchStart={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleQuickAction(e);
+                    }}
+                    className="quick-action-button md:hidden h-10 w-10 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-all active:scale-95 z-10 relative"
+                    style={{ pointerEvents: 'auto' }}
                     title="Move to Active"
                 >
                     <RotateCcw className="w-5 h-5" />
