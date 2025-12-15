@@ -242,6 +242,40 @@ export async function smartSchedule(
     // Use the first available slot
     const selectedSlot = freeSlots[0];
     
+    console.log('[SMART-SCHEDULE] ========== SELECTING SLOT ==========');
+    console.log('[SMART-SCHEDULE] Total available slots:', freeSlots.length);
+    console.log('[SMART-SCHEDULE] Selected slot #1 (first available):');
+    console.log('[SMART-SCHEDULE]   UTC:', selectedSlot.start.toISOString(), 'to', selectedSlot.end.toISOString());
+    console.log('[SMART-SCHEDULE]   Local:', selectedSlot.start.toLocaleString(), 'to', selectedSlot.end.toLocaleString());
+    
+    // Get timezone for logging
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    const getLocalTime = (date: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(date);
+      return {
+        hour: parseInt(parts.find(p => p.type === 'hour')?.value || '0'),
+        minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+      };
+    };
+    const slotStartLocal = getLocalTime(selectedSlot.start);
+    const slotEndLocal = getLocalTime(selectedSlot.end);
+    console.log('[SMART-SCHEDULE]   Local time (' + timeZone + '):', 
+      `${slotStartLocal.hour}:${slotStartLocal.minute.toString().padStart(2, '0')} - ${slotEndLocal.hour}:${slotEndLocal.minute.toString().padStart(2, '0')}`);
+    
+    // Why this slot was selected
+    console.log('[SMART-SCHEDULE] Why this slot was selected:');
+    console.log('[SMART-SCHEDULE]   1. It is the first available slot found');
+    console.log('[SMART-SCHEDULE]   2. It is within working hours:', config.workingHoursStart, '-', config.workingHoursEnd);
+    console.log('[SMART-SCHEDULE]   3. It does not conflict with any busy slots');
+    console.log('[SMART-SCHEDULE]   4. It has sufficient duration:', duration, 'minutes');
+    console.log('[SMART-SCHEDULE] ====================================');
+    
     // CRITICAL: Double-check that the selected slot doesn't conflict with ANY busy slot
     // This is a safety check to ensure findFreeSlots didn't miss anything
     const slotStart = selectedSlot.start.getTime();

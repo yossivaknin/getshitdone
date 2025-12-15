@@ -533,11 +533,22 @@ export async function scheduleTask(
     const defaultStart = workingHoursStart || '09:00'
     const defaultEnd = workingHoursEnd || '18:00'
     
+    const now = new Date();
     console.log('[SCHEDULE] ========== SCHEDULING TASK ==========');
     console.log('[SCHEDULE] Task:', taskData.title);
     console.log('[SCHEDULE] Duration:', taskData.duration, 'minutes');
+    console.log('[SCHEDULE] Current time (UTC):', now.toISOString());
+    console.log('[SCHEDULE] Current time (local):', now.toLocaleString());
     console.log('[SCHEDULE] Working hours (from parameters/localStorage):', `${defaultStart} - ${defaultEnd}`);
     console.log('[SCHEDULE] Working hours source:', workingHoursStart ? 'parameters' : (workingHoursEnd ? 'parameters (end only)' : 'defaults (09:00-18:00)'));
+    
+    // Check localStorage to see what's actually stored
+    if (typeof window !== 'undefined') {
+      const storedStart = localStorage.getItem('working_hours_start');
+      const storedEnd = localStorage.getItem('working_hours_end');
+      console.log('[SCHEDULE] localStorage working_hours_start:', storedStart);
+      console.log('[SCHEDULE] localStorage working_hours_end:', storedEnd);
+    }
     
     // DEBUGGER: Pause here to inspect working hours source
     debugger; // Check: workingHoursStart, workingHoursEnd, defaultStart, defaultEnd

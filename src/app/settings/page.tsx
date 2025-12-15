@@ -483,8 +483,11 @@ export default function SettingsPage() {
                 type="time"
                 value={workingHoursStart}
                 onChange={(e) => {
-                  setWorkingHoursStart(e.target.value);
-                  localStorage.setItem('working_hours_start', e.target.value);
+                  const value = e.target.value;
+                  setWorkingHoursStart(value);
+                  localStorage.setItem('working_hours_start', value);
+                  console.log('[SETTINGS] ✅ Working hours START saved to localStorage:', value);
+                  console.log('[SETTINGS] Full working hours:', `${value} - ${workingHoursEnd}`);
                 }}
               />
             </div>
@@ -495,8 +498,11 @@ export default function SettingsPage() {
                 type="time"
                 value={workingHoursEnd}
                 onChange={(e) => {
-                  setWorkingHoursEnd(e.target.value);
-                  localStorage.setItem('working_hours_end', e.target.value);
+                  const value = e.target.value;
+                  setWorkingHoursEnd(value);
+                  localStorage.setItem('working_hours_end', value);
+                  console.log('[SETTINGS] ✅ Working hours END saved to localStorage:', value);
+                  console.log('[SETTINGS] Full working hours:', `${workingHoursStart} - ${value}`);
                 }}
               />
             </div>

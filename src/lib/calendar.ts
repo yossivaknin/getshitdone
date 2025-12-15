@@ -245,12 +245,17 @@ Please verify:
     }
 
     const data = await response.json();
-    console.log('[CALENDAR] Response data:', JSON.stringify(data, null, 2));
+    console.log('[CALENDAR] ========== BUSY SLOTS FROM GOOGLE API ==========');
+    console.log('[CALENDAR] Raw API response:', JSON.stringify(data, null, 2));
     
     const busySlots: TimeSlot[] = [];
+    const now = new Date();
 
     if (data.calendars?.primary?.busy) {
       console.log('[CALENDAR] ✅ Found', data.calendars.primary.busy.length, 'busy periods from Google Calendar FreeBusy API');
+      console.log('[CALENDAR] Current time (UTC):', now.toISOString());
+      console.log('[CALENDAR] Current time (local):', now.toLocaleString());
+      console.log('[CALENDAR] All busy slots from API:');
       for (const busy of data.calendars.primary.busy) {
         const startDate = new Date(busy.start);
         const endDate = new Date(busy.end);
@@ -258,7 +263,12 @@ Please verify:
           start: startDate,
           end: endDate,
         });
-        console.log(`[CALENDAR]   Busy: ${startDate.toISOString()} to ${endDate.toISOString()} (${startDate.toLocaleString()} - ${endDate.toLocaleString()})`);
+        const duration = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
+        console.log(`[CALENDAR]   Slot ${busySlots.length}:`);
+        console.log(`[CALENDAR]     UTC: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+        console.log(`[CALENDAR]     Local: ${startDate.toLocaleString()} to ${endDate.toLocaleString()}`);
+        console.log(`[CALENDAR]     Duration: ${duration} minutes`);
+        console.log(`[CALENDAR]     Is in past: ${startDate < now ? 'YES' : 'NO'}`);
       }
     } else {
       console.warn('[CALENDAR] ⚠️ No busy periods found in FreeBusy API response. This might mean:');
@@ -268,6 +278,7 @@ Please verify:
     }
 
     console.log(`[CALENDAR] Total busy slots from FreeBusy API: ${busySlots.length}`);
+    console.log('[CALENDAR] ================================================');
     if (busySlots.length === 0) {
       console.warn('[CALENDAR] ⚠️ WARNING: No busy slots found! Conflict detection will not work for external meetings!');
     }
