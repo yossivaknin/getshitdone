@@ -409,7 +409,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             console.error('[DRAG] Error re-scheduling task:', error);
             return false;
         }
-    }, []);
+    }, [updateTasks]);
 
     const handleDragStart = useCallback((event: any) => {
         const { active } = event;
