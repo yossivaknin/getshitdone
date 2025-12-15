@@ -573,6 +573,7 @@ export async function scheduleTask(
     
     console.log('[SCHEDULE] Calendar config working hours:', `${config.workingHoursStart} - ${config.workingHoursEnd}`);
     console.log('[SCHEDULE] Calendar config timezone:', config.timezone);
+    console.log('[SCHEDULE] Calendar config object:', JSON.stringify(config, null, 2));
 
     // Get busy slots from now until due date
     // IMPORTANT: FreeBusy API returns ALL busy periods, including external meetings

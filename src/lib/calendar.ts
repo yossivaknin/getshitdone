@@ -682,8 +682,13 @@ export async function createCalendarEvent(
   const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
   const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
   
-  // Get user's timezone - this is critical for proper time handling
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+  // Get user's timezone from config (CRITICAL FIX: Don't detect from server!)
+  const timeZone = config.timezone || 'America/New_York';
+  console.log('[EVENT] ========== TIMEZONE DEBUG ==========');
+  console.log('[EVENT] Config timezone:', config.timezone);
+  console.log('[EVENT] Using timezone:', timeZone);
+  console.log('[EVENT] Server timezone (WRONG - do not use!):', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  console.log('[EVENT] ====================================');
   
   // Convert dates to the user's local timezone for validation
   // Create formatters to get local time components
