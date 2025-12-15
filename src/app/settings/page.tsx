@@ -29,6 +29,12 @@ export default function SettingsPage() {
     }
     return '18:00';
   });
+  const [userTimezone, setUserTimezone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('user_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    }
+    return 'America/New_York';
+  });
   const [createTaskShortcut, setCreateTaskShortcut] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('create_task_shortcut') || 'n';
@@ -469,7 +475,7 @@ export default function SettingsPage() {
             Tasks will only be scheduled during these hours. Default: 9:00 AM - 6:00 PM
           </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="start-time" className="mb-2">Start Time</Label>
               <Input
@@ -493,6 +499,34 @@ export default function SettingsPage() {
                   localStorage.setItem('working_hours_end', e.target.value);
                 }}
               />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="user-timezone">Timezone</Label>
+              <select
+                id="user-timezone"
+                value={userTimezone}
+                onChange={(e) => {
+                  setUserTimezone(e.target.value);
+                  localStorage.setItem('user_timezone', e.target.value);
+                  toast.success(`Timezone set to ${e.target.value}`);
+                }}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="America/New_York">Eastern Time (America/New_York)</option>
+                <option value="America/Chicago">Central Time (America/Chicago)</option>
+                <option value="America/Denver">Mountain Time (America/Denver)</option>
+                <option value="America/Los_Angeles">Pacific Time (America/Los_Angeles)</option>
+                <option value="America/Phoenix">Arizona Time (America/Phoenix)</option>
+                <option value="America/Anchorage">Alaska Time (America/Anchorage)</option>
+                <option value="Pacific/Honolulu">Hawaii Time (Pacific/Honolulu)</option>
+                <option value="UTC">UTC</option>
+                <option value="Europe/London">London (Europe/London)</option>
+                <option value="Europe/Paris">Paris (Europe/Paris)</option>
+                <option value="Asia/Tokyo">Tokyo (Asia/Tokyo)</option>
+                <option value="Asia/Shanghai">Shanghai (Asia/Shanghai)</option>
+                <option value="Australia/Sydney">Sydney (Australia/Sydney)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Select your timezone for accurate scheduling</p>
             </div>
           </div>
         </div>

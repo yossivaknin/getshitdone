@@ -1,5 +1,6 @@
 // Google Calendar API utilities
 // This will be used server-side for calendar operations
+import { DateTime } from 'luxon';
 
 export interface CalendarEvent {
   start: Date;
@@ -17,6 +18,7 @@ export interface CalendarConfig {
   refreshToken?: string;
   workingHoursStart: string; // "09:00"
   workingHoursEnd: string; // "18:00"
+  timezone?: string; // IANA timezone like "America/New_York" (defaults to "America/New_York")
 }
 
 /**
@@ -59,8 +61,13 @@ export async function getBusySlots(
   timeMin: Date,
   timeMax: Date
 ): Promise<TimeSlot[]> {
+  // Convert Date to RFC3339 format for Google API
+  const timeMinRFC = DateTime.fromJSDate(timeMin).toUTC().toISO({ includeOffset: false }) + 'Z';
+  const timeMaxRFC = DateTime.fromJSDate(timeMax).toUTC().toISO({ includeOffset: false }) + 'Z';
+  
   console.log('[CALENDAR] Fetching busy slots...');
-  console.log('[CALENDAR] Time range:', timeMin.toISOString(), 'to', timeMax.toISOString());
+  console.log('[CALENDAR] Time range (UTC):', timeMin.toISOString(), 'to', timeMax.toISOString());
+  console.log('[CALENDAR] Time range (RFC3339):', timeMinRFC, 'to', timeMaxRFC);
   
   // First, verify token has calendar scope and get project info
   let tokenProjectId: string | null = null;
