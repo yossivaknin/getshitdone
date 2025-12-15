@@ -248,11 +248,11 @@ export async function smartSchedule(
     console.log('[SMART-SCHEDULE]   UTC:', selectedSlot.start.toISOString(), 'to', selectedSlot.end.toISOString());
     console.log('[SMART-SCHEDULE]   Local:', selectedSlot.start.toLocaleString(), 'to', selectedSlot.end.toLocaleString());
     
-    // Get timezone for logging
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
-    const getLocalTime = (date: Date) => {
+    // Get timezone for logging (use different variable names to avoid conflicts)
+    const logTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    const getSlotLocalTime = (date: Date) => {
       const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timeZone,
+        timeZone: logTimeZone,
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
@@ -263,10 +263,10 @@ export async function smartSchedule(
         minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0')
       };
     };
-    const slotStartLocal = getLocalTime(selectedSlot.start);
-    const slotEndLocal = getLocalTime(selectedSlot.end);
-    console.log('[SMART-SCHEDULE]   Local time (' + timeZone + '):', 
-      `${slotStartLocal.hour}:${slotStartLocal.minute.toString().padStart(2, '0')} - ${slotEndLocal.hour}:${slotEndLocal.minute.toString().padStart(2, '0')}`);
+    const selectedSlotStartLocal = getSlotLocalTime(selectedSlot.start);
+    const selectedSlotEndLocal = getSlotLocalTime(selectedSlot.end);
+    console.log('[SMART-SCHEDULE]   Local time (' + logTimeZone + '):', 
+      `${selectedSlotStartLocal.hour}:${selectedSlotStartLocal.minute.toString().padStart(2, '0')} - ${selectedSlotEndLocal.hour}:${selectedSlotEndLocal.minute.toString().padStart(2, '0')}`);
     
     // Why this slot was selected
     console.log('[SMART-SCHEDULE] Why this slot was selected:');
