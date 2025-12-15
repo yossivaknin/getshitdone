@@ -294,47 +294,106 @@ export function findFreeSlots(
   const [startHour, startMin] = workingHoursStart.split(':').map(Number);
   const [endHour, endMin] = workingHoursEnd.split(':').map(Number);
   
+  // Get user's timezone - default to America/New_York (NY timezone)
+  // This is critical because the server might be in UTC, but we need to work in user's timezone
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+  
+  // Helper to get local time components in user's timezone
+  const getLocalTime = (date: Date) => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(date);
+    return {
+      year: parseInt(parts.find(p => p.type === 'year')?.value || '0'),
+      month: parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1,
+      day: parseInt(parts.find(p => p.type === 'day')?.value || '0'),
+      hour: parseInt(parts.find(p => p.type === 'hour')?.value || '0'),
+      minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+    };
+  };
+  
+  // Helper to create a date in user's timezone with specific hour/minute
+  // This properly converts from user's local time to UTC for the Date object
+  const createDateInUserTimezone = (baseDate: Date, hour: number, minute: number): Date => {
+    const local = getLocalTime(baseDate);
+    // Create a date string representing the time in the user's timezone
+    const dateStr = `${local.year}-${String(local.month + 1).padStart(2, '0')}-${String(local.day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    
+    // Create a date object - JavaScript will interpret this as local server time
+    // We need to convert it to represent the correct UTC time for the user's timezone
+    // Method: Create a date in UTC that represents the same moment in user's timezone
+    const tempDate = new Date(dateStr);
+    
+    // Get the timezone offset for the user's timezone at this date
+    // We'll use a trick: format the date in both UTC and user's timezone to get the offset
+    const utcStr = tempDate.toLocaleString('en-US', { timeZone: 'UTC', hour12: false });
+    const tzStr = tempDate.toLocaleString('en-US', { timeZone: timeZone, hour12: false });
+    
+    // Parse both to get the offset
+    const utcDate = new Date(utcStr);
+    const tzDate = new Date(tzStr);
+    const offset = utcDate.getTime() - tzDate.getTime();
+    
+    // Apply the offset to get the correct UTC time
+    return new Date(tempDate.getTime() - offset);
+  };
+  
   // Start from NOW or timeMin, whichever is later (don't schedule in the past!)
   const now = new Date();
   const startFrom = timeMin > now ? timeMin : now;
   let currentDate = new Date(startFrom);
   
+  // Get local time components for comparison
+  const nowLocal = getLocalTime(now);
+  const currentLocal = getLocalTime(currentDate);
+  
   // ALWAYS ensure we start at working hours, regardless of input time
   // If we're starting today, set to working hours start, but don't go back in time
-  if (currentDate.getDate() === now.getDate() && 
-      currentDate.getMonth() === now.getMonth() && 
-      currentDate.getFullYear() === now.getFullYear()) {
+  if (currentLocal.year === nowLocal.year && 
+      currentLocal.month === nowLocal.month && 
+      currentLocal.day === nowLocal.day) {
     // Today - start from now or working hours start, whichever is later
-    const todayStart = new Date(currentDate);
-    todayStart.setHours(startHour, startMin, 0, 0);
+    const todayStart = createDateInUserTimezone(currentDate, startHour, startMin);
     currentDate = todayStart > now ? todayStart : now;
-    // Round up to next 15 minutes
-    const minutes = currentDate.getMinutes();
-    const roundedMinutes = Math.ceil(minutes / 15) * 15;
-    currentDate.setMinutes(roundedMinutes, 0, 0);
     
-    // CRITICAL: If rounded time is still before working hours start, move to start
-    const todayWorkingStart = new Date(currentDate);
-    todayWorkingStart.setHours(startHour, startMin, 0, 0);
-    if (currentDate < todayWorkingStart) {
-      currentDate = new Date(todayWorkingStart);
+    // Get current local time after adjustment
+    const currentLocalAfter = getLocalTime(currentDate);
+    
+    // Round up to next 15 minutes in local time
+    let roundedMinutes = Math.ceil(currentLocalAfter.minute / 15) * 15;
+    let roundedHour = currentLocalAfter.hour;
+    if (roundedMinutes >= 60) {
+      roundedMinutes = 0;
+      roundedHour += 1;
+    }
+    currentDate = createDateInUserTimezone(currentDate, roundedHour, roundedMinutes);
+    
+    // CRITICAL: Check in local time if rounded time is still before working hours start
+    const finalLocal = getLocalTime(currentDate);
+    if (finalLocal.hour < startHour || (finalLocal.hour === startHour && finalLocal.minute < startMin)) {
+      currentDate = createDateInUserTimezone(currentDate, startHour, startMin);
     }
     
-    // CRITICAL: If current time is after working hours end, move to next day's start
-    const todayWorkingEnd = new Date(currentDate);
-    todayWorkingEnd.setHours(endHour, endMin, 0, 0);
-    if (currentDate >= todayWorkingEnd) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
+    // CRITICAL: Check in local time if current time is after working hours end
+    const finalLocalAfter = getLocalTime(currentDate);
+    if (finalLocalAfter.hour > endHour || (finalLocalAfter.hour === endHour && finalLocalAfter.minute >= endMin)) {
+      const nextDay = new Date(currentDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
     }
   } else {
-    // Future date - ALWAYS start from working hours start
-    currentDate.setHours(startHour, startMin, 0, 0);
-    currentDate.setMinutes(0, 0, 0);
+    // Future date - ALWAYS start from working hours start in user's timezone
+    currentDate = createDateInUserTimezone(currentDate, startHour, startMin);
   }
   
-  const endDate = new Date(timeMax);
-  endDate.setHours(endHour, endMin, 0, 0);
+  const endDate = createDateInUserTimezone(timeMax, endHour, endMin);
   
   console.log('[FREESLOTS] Searching from:', currentDate.toISOString(), 'to', endDate.toISOString());
   console.log('[FREESLOTS] Working hours:', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
@@ -359,56 +418,55 @@ export function findFreeSlots(
   
   while (currentDate < endDate && daysChecked < maxDays) {
     // CRITICAL: Always ensure we're starting at the beginning of working hours for this day
-    const dayStart = new Date(currentDate);
-    dayStart.setHours(startHour, startMin, 0, 0);
-    dayStart.setMinutes(0, 0, 0);
-    const dayEnd = new Date(currentDate);
-    dayEnd.setHours(endHour, endMin, 0, 0);
-    dayEnd.setMinutes(0, 0, 0);
+    // Use user's timezone for all comparisons
+    const currentLocal = getLocalTime(currentDate);
+    const dayStart = createDateInUserTimezone(currentDate, startHour, startMin);
+    const dayEnd = createDateInUserTimezone(currentDate, endHour, endMin);
     
     // If current time is before working hours start, move to start
-    if (currentDate < dayStart) {
-      currentDate = new Date(dayStart);
-      console.log(`[FREESLOTS] Adjusted to working hours start: ${currentDate.toISOString()}`);
+    if (currentLocal.hour < startHour || (currentLocal.hour === startHour && currentLocal.minute < startMin)) {
+      currentDate = dayStart;
+      console.log(`[FREESLOTS] Adjusted to working hours start: ${currentDate.toISOString()} (${timeZone})`);
     }
     
     // If current time is after working hours end, move to next day
-    if (currentDate >= dayEnd) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
-      currentDate.setMinutes(0, 0, 0);
+    if (currentLocal.hour > endHour || (currentLocal.hour === endHour && currentLocal.minute >= endMin)) {
+      const nextDay = new Date(currentDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
       daysChecked++;
-      console.log(`[FREESLOTS] Moved to next day's working hours start: ${currentDate.toISOString()}`);
+      console.log(`[FREESLOTS] Moved to next day's working hours start: ${currentDate.toISOString()} (${timeZone})`);
       continue;
     }
     
     // Calculate slot end
     const slotEnd = new Date(currentDate.getTime() + durationMinutes * 60 * 1000);
     
-    // STRICT CHECK: Slot must be completely within working hours
-    const slotStartHour = currentDate.getHours();
-    const slotStartMin = currentDate.getMinutes();
-    const slotEndHour = slotEnd.getHours();
-    const slotEndMin = slotEnd.getMinutes();
+    // STRICT CHECK: Slot must be completely within working hours (check in user's timezone)
+    const slotStartLocal = getLocalTime(currentDate);
+    const slotEndLocal = getLocalTime(slotEnd);
     
     // Check if slot starts before working hours (shouldn't happen after above check, but be safe)
-    if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
-      currentDate = new Date(dayStart);
+    if (slotStartLocal.hour < startHour || (slotStartLocal.hour === startHour && slotStartLocal.minute < startMin)) {
+      currentDate = dayStart;
       continue;
     }
     
     // Check if slot ends after working hours - if so, move to next day
-    if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
+    if (slotEndLocal.hour > endHour || (slotEndLocal.hour === endHour && slotEndLocal.minute > endMin)) {
+      const nextDay = new Date(currentDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
       daysChecked++;
       continue;
     }
     
     // Final validation: ensure slot is within the day's working hours
-    if (slotEnd > dayEnd) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(startHour, startMin, 0, 0);
+    const slotEndLocalCheck = getLocalTime(slotEnd);
+    if (slotEndLocalCheck.hour > endHour || (slotEndLocalCheck.hour === endHour && slotEndLocalCheck.minute > endMin)) {
+      const nextDay = new Date(currentDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      currentDate = createDateInUserTimezone(nextDay, startHour, startMin);
       daysChecked++;
       continue;
     }
@@ -452,21 +510,19 @@ export function findFreeSlots(
     }
     
     if (slotEnd <= endDate) {
-      // CRITICAL: Double-check that the slot is within working hours
-      const finalStartHour = currentDate.getHours();
-      const finalStartMin = currentDate.getMinutes();
-      const finalEndHour = slotEnd.getHours();
-      const finalEndMin = slotEnd.getMinutes();
+      // CRITICAL: Double-check that the slot is within working hours (in user's timezone)
+      const finalStartLocal = getLocalTime(currentDate);
+      const finalEndLocal = getLocalTime(slotEnd);
       
       // Strict validation: slot must be completely within working hours
-      const isValidStart = finalStartHour > startHour || 
-        (finalStartHour === startHour && finalStartMin >= startMin);
-      const isValidEnd = finalEndHour < endHour || 
-        (finalEndHour === endHour && finalEndMin <= endMin);
+      const isValidStart = finalStartLocal.hour > startHour || 
+        (finalStartLocal.hour === startHour && finalStartLocal.minute >= startMin);
+      const isValidEnd = finalEndLocal.hour < endHour || 
+        (finalEndLocal.hour === endHour && finalEndLocal.minute <= endMin);
       
       // Additional check: ensure slot doesn't span across working hours boundary
-      const slotStartTime = finalStartHour * 60 + finalStartMin;
-      const slotEndTime = finalEndHour * 60 + finalEndMin;
+      const slotStartTime = finalStartLocal.hour * 60 + finalStartLocal.minute;
+      const slotEndTime = finalEndLocal.hour * 60 + finalEndLocal.minute;
       const workingStartTime = startHour * 60 + startMin;
       const workingEndTime = endHour * 60 + endMin;
       
@@ -492,7 +548,7 @@ export function findFreeSlots(
         });
         
         console.log(`[FREESLOTS] ✅ Found valid slot: ${new Date(currentDate).toISOString()} to ${slotEnd.toISOString()}`);
-        console.log(`[FREESLOTS] Slot time: ${finalStartHour}:${finalStartMin.toString().padStart(2, '0')} - ${finalEndHour}:${finalEndMin.toString().padStart(2, '0')}`);
+        console.log(`[FREESLOTS] Slot time (${timeZone}): ${finalStartLocal.hour}:${finalStartLocal.minute.toString().padStart(2, '0')} - ${finalEndLocal.hour}:${finalEndLocal.minute.toString().padStart(2, '0')}`);
         console.log(`[FREESLOTS] ✅ Verified: No conflicts with ${sortedBusy.length} busy slots`);
         
         // If we found enough slots, we can return early
@@ -502,9 +558,10 @@ export function findFreeSlots(
         }
       } else {
         console.warn(`[FREESLOTS] ❌ Slot rejected - outside working hours:`, {
-          start: `${finalStartHour}:${finalStartMin}`,
-          end: `${finalEndHour}:${finalEndMin}`,
+          start: `${finalStartLocal.hour}:${finalStartLocal.minute}`,
+          end: `${finalEndLocal.hour}:${finalEndLocal.minute}`,
           workingHours: `${startHour}:${startMin} - ${endHour}:${endMin}`,
+          timezone: timeZone,
           isWithinWorkingHours: isWithinWorkingHours
         });
         // If slot is outside working hours, move to next day's start instead of incrementing
@@ -560,40 +617,61 @@ export async function createCalendarEvent(
   const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
   const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
   
-  const eventStartHour = start.getHours();
-  const eventStartMin = start.getMinutes();
-  const eventEndHour = end.getHours();
-  const eventEndMin = end.getMinutes();
+  // Get user's timezone - this is critical for proper time handling
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+  
+  // Convert dates to the user's local timezone for validation
+  // Create formatters to get local time components
+  const startFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  const endFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  // Get local time components in the user's timezone
+  const startParts = startFormatter.formatToParts(start);
+  const endParts = endFormatter.formatToParts(end);
+  
+  const eventStartHour = parseInt(startParts.find(p => p.type === 'hour')?.value || '0');
+  const eventStartMin = parseInt(startParts.find(p => p.type === 'minute')?.value || '0');
+  const eventEndHour = parseInt(endParts.find(p => p.type === 'hour')?.value || '0');
+  const eventEndMin = parseInt(endParts.find(p => p.type === 'minute')?.value || '0');
+  
+  console.log('[EVENT] Timezone:', timeZone);
+  console.log('[EVENT] Start (local):', `${eventStartHour}:${eventStartMin.toString().padStart(2, '0')}`);
+  console.log('[EVENT] End (local):', `${eventEndHour}:${eventEndMin.toString().padStart(2, '0')}`);
+  console.log('[EVENT] Working hours:', `${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
   
   // Check if event starts before working hours
   if (eventStartHour < startHour || (eventStartHour === startHour && eventStartMin < startMin)) {
-    const error = `Event starts before working hours: ${eventStartHour}:${eventStartMin} (working hours: ${startHour}:${startMin})`;
+    const error = `Event starts before working hours: ${eventStartHour}:${eventStartMin.toString().padStart(2, '0')} (working hours: ${startHour}:${startMin.toString().padStart(2, '0')})`;
     console.error('[EVENT]', error);
     throw new Error(error);
   }
   
   // Check if event ends after working hours
   if (eventEndHour > endHour || (eventEndHour === endHour && eventEndMin > endMin)) {
-    const error = `Event ends after working hours: ${eventEndHour}:${eventEndMin} (working hours: ${endHour}:${endMin})`;
+    const error = `Event ends after working hours: ${eventEndHour}:${eventEndMin.toString().padStart(2, '0')} (working hours: ${endHour}:${endMin.toString().padStart(2, '0')})`;
     console.error('[EVENT]', error);
     throw new Error(error);
   }
   
   console.log('[EVENT] Creating calendar event...');
   console.log('[EVENT] Summary:', summary);
-  console.log('[EVENT] Start:', start.toISOString(), `(${eventStartHour}:${eventStartMin})`);
-  console.log('[EVENT] End:', end.toISOString(), `(${eventEndHour}:${eventEndMin})`);
-  console.log('[EVENT] Working hours:', `${startHour}:${startMin} - ${endHour}:${endMin}`);
+  console.log('[EVENT] Start (UTC):', start.toISOString());
+  console.log('[EVENT] End (UTC):', end.toISOString());
   
   try {
-    // Get user's timezone from the system or use UTC as fallback
-    // The timezone should match the timezone of the dateTime
-    // Since we're using ISO strings (UTC), we should use UTC timezone
-    // OR convert the dates to the user's local timezone
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    
-    // Convert dates to the specified timezone for proper display
     // Google Calendar API expects dateTime in RFC3339 format with timezone
+    // The dateTime should be in ISO format (UTC), but we specify the timezone
+    // so Google knows how to interpret it
     const startDateTime = new Date(start);
     const endDateTime = new Date(end);
     
