@@ -535,11 +535,22 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             });
             console.log('[Board] Extracted tags from tasks:', taskTagsMap.size, Array.from(taskTagsMap.keys()));
             
+            // If localStorage is empty but we have tags in tasks, restore them to localStorage
+            if (managedTags.length === 0 && taskTagsMap.size > 0) {
+                console.log('[Board] ⚠️ No tags in localStorage, but found tags in tasks. Restoring to localStorage...');
+                const { addTagToManaged } = await import('@/lib/tags');
+                taskTagsMap.forEach((tag) => {
+                    addTagToManaged(tag.name);
+                });
+                console.log('[Board] ✅ Restored', taskTagsMap.size, 'tags to localStorage');
+            }
+            
             // Combine managed tags and task tags, with managed tags taking precedence for colors
             const combinedTags = new Map<string, { name: string; color: string }>();
             
-            // First add all managed tags
-            managedTags.forEach(tag => {
+            // First add all managed tags (reload after potential restore)
+            const updatedManagedTags = getAllTagsWithColors();
+            updatedManagedTags.forEach(tag => {
                 combinedTags.set(tag.name, tag);
             });
             
