@@ -417,24 +417,39 @@ export async function updateTaskStatus(taskId: string, newStatus: string, newPos
     return { error: 'Not authenticated' }
   }
 
+  console.log('[updateTaskStatus] Updating task:', {
+    taskId,
+    newStatus,
+    newPosition,
+    userId: user.id
+  });
+
   const updateData: any = { status: newStatus }
   if (newPosition !== undefined) {
     updateData.position = newPosition
   }
 
-  const { error } = await supabase
+  const { data: updatedTask, error } = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
     .eq('user_id', user.id)
+    .select()
+    .single()
 
   if (error) {
-    console.error('Error updating task status:', error)
+    console.error('[updateTaskStatus] Error updating task status:', error)
     return { error: error.message }
   }
 
+  console.log('[updateTaskStatus] Task updated successfully:', {
+    taskId: updatedTask?.id,
+    newStatus: updatedTask?.status,
+    oldStatus: 'unknown'
+  });
+
   revalidatePath('/app')
-  return { error: null }
+  return { error: null, task: updatedTask }
 }
 
 export async function scheduleTask(
