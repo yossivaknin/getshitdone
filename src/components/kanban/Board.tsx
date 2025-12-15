@@ -538,7 +538,6 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             // If localStorage is empty but we have tags in tasks, restore them to localStorage
             if (managedTags.length === 0 && taskTagsMap.size > 0) {
                 console.log('[Board] ⚠️ No tags in localStorage, but found tags in tasks. Restoring to localStorage...');
-                const { addTagToManaged } = await import('@/lib/tags');
                 taskTagsMap.forEach((tag) => {
                     addTagToManaged(tag.name);
                 });
