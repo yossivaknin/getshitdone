@@ -228,7 +228,8 @@ export default function SettingsPage() {
     try {
       // Pass the Client ID from frontend to ensure validation works even if server env var is missing
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      const result = await testCalendarAPI(accessToken, refreshToken || undefined, clientId);
+      const userTimezone = localStorage.getItem('user_timezone') || 'America/New_York';
+      const result = await testCalendarAPI(accessToken, refreshToken || undefined, clientId, userTimezone);
       if (result.success) {
         toast.success(result.message + ` Created test event. Check your calendar!`);
         console.log('Test details:', result.details);

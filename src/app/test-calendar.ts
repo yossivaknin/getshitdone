@@ -3,7 +3,7 @@
 import { getBusySlots, createCalendarEvent, CalendarConfig } from '@/lib/calendar';
 import { refreshAccessToken } from '@/lib/token-refresh';
 
-export async function testCalendarAPI(accessToken: string, refreshToken?: string, expectedClientId?: string) {
+export async function testCalendarAPI(accessToken: string, refreshToken?: string, expectedClientId?: string, userTimezone: string = 'America/New_York') {
   try {
     console.log('[TEST] Starting Calendar API test...');
     console.log('[TEST] Token preview:', accessToken.substring(0, 20) + '...');
@@ -203,7 +203,7 @@ Make sure Calendar API is enabled in project ${projectNumber}`
       refreshToken: refreshToken,
       workingHoursStart: '09:00',
       workingHoursEnd: '18:00',
-      timezone: 'America/New_York' // Default timezone for test
+      timezone: userTimezone // Use the passed timezone parameter
     };
 
     // Test 3: Get busy slots (FreeBusy API)
