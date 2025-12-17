@@ -315,17 +315,17 @@ export async function smartSchedule(
     allFreeSlots.push(selectedSlot);
     
     // Validate selected slot is within working hours
-    // CRITICAL FIX: Use timezone-aware time checking, not getHours() which returns UTC!
+    // CRITICAL FIX: Use user's timezone from config, NOT server timezone (UTC)!
     const [startHour, startMin] = config.workingHoursStart.split(':').map(Number);
     const [endHour, endMin] = config.workingHoursEnd.split(':').map(Number);
     
-    // Get user's timezone for validation
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    // Use user's timezone from config (already defined above as userTimezone)
+    // DO NOT use Intl.DateTimeFormat().resolvedOptions().timeZone - that's server timezone (UTC)!
     
-    // Get local time components in user's timezone (NOT UTC!)
+    // Get local time components in user's timezone (NOT UTC or server timezone!)
     const getLocalTime = (date: Date) => {
       const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timeZone,
+        timeZone: userTimezone, // Use user's timezone from config
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
@@ -345,25 +345,20 @@ export async function smartSchedule(
     const slotEndMin = slotEndLocal.minute;
     
     console.log(`[SMART-SCHEDULE] ✅ Selected slot: ${selectedSlot.start.toISOString()} to ${selectedSlot.end.toISOString()}`);
-    console.log(`[SMART-SCHEDULE] Slot time (${timeZone}): ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} - ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')}`);
+    console.log(`[SMART-SCHEDULE] Slot time (${userTimezone}): ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} - ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')}`);
     console.log(`[SMART-SCHEDULE] Working hours: ${startHour}:${startMin.toString().padStart(2, '0')} - ${endHour}:${endMin.toString().padStart(2, '0')}`);
     console.log(`[SMART-SCHEDULE] ✅ Verified: No conflicts with ${scheduledSlots.length} busy slots`);
     
-    // DEBUGGER: Pause here to inspect validation - NOW USING TIMEZONE-AWARE TIME!
-    debugger; // Check: slotStartHour, slotStartMin, slotEndHour, slotEndMin, startHour, startMin, endHour, endMin, timeZone
-    
-    // Validate slot is within working hours (using timezone-aware times)
+    // Validate slot is within working hours (using user's timezone)
     if (slotStartHour < startHour || (slotStartHour === startHour && slotStartMin < startMin)) {
-      const error = `Selected slot starts before working hours: ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} (${timeZone}) (working hours: ${startHour}:${startMin.toString().padStart(2, '0')})`;
+      const error = `Selected slot starts before working hours: ${slotStartHour}:${slotStartMin.toString().padStart(2, '0')} (${userTimezone}) (working hours: ${startHour}:${startMin.toString().padStart(2, '0')})`;
       console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
-      debugger; // DEBUGGER: Pause here if validation fails
       throw new Error(error);
     }
     
     if (slotEndHour > endHour || (slotEndHour === endHour && slotEndMin > endMin)) {
-      const error = `Selected slot ends after working hours: ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')} (${timeZone}) (working hours: ${endHour}:${endMin.toString().padStart(2, '0')})`;
+      const error = `Selected slot ends after working hours: ${slotEndHour}:${slotEndMin.toString().padStart(2, '0')} (${userTimezone}) (working hours: ${endHour}:${endMin.toString().padStart(2, '0')})`;
       console.error(`[SMART-SCHEDULE] ERROR: ${error}`);
-      debugger; // DEBUGGER: Pause here if validation fails
       throw new Error(error);
     }
     
