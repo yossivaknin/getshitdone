@@ -214,11 +214,40 @@ Make sure Calendar API is enabled in project ${projectNumber}`
 
     const busySlots = await getBusySlots(config, now, tomorrow);
 
-    // Test 2: Create a test event
-    const testStart = new Date(now);
-    testStart.setHours(10, 0, 0, 0); // 10 AM today
-    const testEnd = new Date(testStart);
-    testEnd.setMinutes(testEnd.getMinutes() + 30); // 30 minutes
+    // Test 4: Create a test event
+    // CRITICAL: Create test event time in user's timezone, not UTC
+    // Use Luxon to properly handle timezone conversion
+    const { DateTime } = await import('luxon');
+    const userTz = userTimezone || 'America/New_York';
+    
+    // Get current time in user's timezone
+    const nowInUserTz = DateTime.now().setZone(userTz);
+    
+    // Set to 10 AM in user's timezone (or next hour if it's past 10 AM)
+    let testStartHour = 10;
+    if (nowInUserTz.hour >= 10) {
+      // If it's already past 10 AM, use next hour
+      testStartHour = nowInUserTz.hour + 1;
+    }
+    
+    // Create test event at testStartHour in user's timezone
+    const testStartInUserTz = nowInUserTz.set({ 
+      hour: testStartHour, 
+      minute: 0, 
+      second: 0, 
+      millisecond: 0 
+    });
+    
+    // Convert to UTC Date object for the API
+    const testStart = testStartInUserTz.toJSDate();
+    const testEnd = testStartInUserTz.plus({ minutes: 30 }).toJSDate();
+    
+    console.log('[TEST] Test event time:', {
+      userTimezone: userTz,
+      localTime: testStartInUserTz.toFormat('yyyy-MM-dd HH:mm'),
+      utcTime: testStart.toISOString(),
+      localHour: testStartInUserTz.hour
+    });
 
     const testEventId = await createCalendarEvent(
       config,
