@@ -12,7 +12,13 @@ const nextConfig = {
   transpilePackages: [
     'react-hot-toast',
     '@radix-ui/react-dialog',
+    '@tauri-apps/api',
+    '@tauri-apps/plugin-notification',
   ],
+  // For Tauri: use static export when building for desktop
+  output: process.env.TAURI_BUILD === 'true' ? 'export' : undefined,
+  // Output configuration for Tauri
+  output: process.env.TAURI_BUILD === 'true' ? 'export' : undefined,
   // PWA configuration
   async headers() {
     return [

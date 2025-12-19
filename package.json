@@ -7,7 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -19,6 +22,7 @@
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.84.0",
     "@tanstack/react-query": "^5.90.10",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "googleapis": "^166.0.0",
@@ -33,6 +37,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/cli": "^2.9.6",
     "@types/luxon": "^3.7.1",
     "@types/node": "^20",
     "@types/react": "^19",
