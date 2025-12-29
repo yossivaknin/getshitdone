@@ -42,30 +42,51 @@ export async function GET() {
     let modelName = '';
     
     try {
+      console.log('[BRIEFING API] Calling listModels()...');
       const modelsResponse = await genAI.listModels();
-      availableModels = modelsResponse.models || [];
+      console.log('[BRIEFING API] listModels() response:', JSON.stringify(modelsResponse, null, 2));
+      
+      // Check if response has models property or if it's an array
+      if (Array.isArray(modelsResponse)) {
+        availableModels = modelsResponse;
+      } else if (modelsResponse.models) {
+        availableModels = modelsResponse.models;
+      } else if (modelsResponse.data && Array.isArray(modelsResponse.data)) {
+        availableModels = modelsResponse.data;
+      } else {
+        console.warn('[BRIEFING API] Unexpected listModels() response format:', modelsResponse);
+        availableModels = [];
+      }
+      
       console.log(`[BRIEFING API] Found ${availableModels.length} available models`);
-      console.log('[BRIEFING API] Available model names:', availableModels.map((m: any) => m.name));
+      if (availableModels.length > 0) {
+        console.log('[BRIEFING API] Available model names:', availableModels.map((m: any) => m.name || m));
+      }
       
       // Find a model that supports generateContent
       // Model names might be in format: "models/gemini-pro" or just "gemini-pro"
       const supportedModel = availableModels.find((m: any) => {
         const methods = m.supportedGenerationMethods || [];
-        return methods.includes('generateContent') || 
+        const name = m.name || m;
+        return (methods.includes('generateContent') || 
                methods.includes('GENERATE_CONTENT') ||
-               methods.length > 0; // If it has any methods, try it
+               methods.length > 0) && // If it has any methods, try it
+               name && name.includes('gemini'); // Make sure it's a gemini model
       });
       
       if (supportedModel) {
         // Extract model name (format: models/gemini-pro or just gemini-pro)
-        modelName = supportedModel.name.replace(/^models\//, '');
+        const fullName = supportedModel.name || supportedModel;
+        modelName = fullName.replace(/^models\//, '');
         console.log(`[BRIEFING API] Using model: ${modelName} (from available models)`);
         console.log(`[BRIEFING API] Model display name: ${supportedModel.displayName || 'N/A'}`);
         console.log(`[BRIEFING API] Supported methods: ${(supportedModel.supportedGenerationMethods || []).join(', ')}`);
       } else {
         // Fallback: try the first available model
         if (availableModels.length > 0) {
-          modelName = availableModels[0].name.replace(/^models\//, '');
+          const firstModel = availableModels[0];
+          const fullName = firstModel.name || firstModel;
+          modelName = fullName.replace(/^models\//, '');
           console.log(`[BRIEFING API] Using first available model: ${modelName}`);
         } else {
           // Last resort: try common model names
@@ -77,6 +98,7 @@ export async function GET() {
     } catch (listError: any) {
       console.error('[BRIEFING API] Failed to list models:', listError);
       console.error('[BRIEFING API] Error details:', listError.message);
+      console.error('[BRIEFING API] Error stack:', listError.stack);
       // Fallback to gemini-pro
       modelName = 'gemini-pro';
       console.log(`[BRIEFING API] Using fallback model: ${modelName}`);
