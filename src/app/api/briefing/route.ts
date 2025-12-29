@@ -41,6 +41,9 @@ export async function GET() {
     let availableModels: any[] = [];
     let modelName = '';
     
+    // Define the correct available models (in order of preference)
+    const correctModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro'];
+    
     try {
       console.log('[BRIEFING API] Calling listModels()...');
       const modelsResponse = await genAI.listModels();
@@ -77,30 +80,30 @@ export async function GET() {
       if (supportedModel) {
         // Extract model name (format: models/gemini-pro or just gemini-pro)
         const fullName = supportedModel.name || supportedModel;
-        modelName = fullName.replace(/^models\//, '');
-        console.log(`[BRIEFING API] Using model: ${modelName} (from available models)`);
+        const extractedName = fullName.replace(/^models\//, '');
+        
+        // Check if the extracted name is one of our correct models
+        if (correctModels.includes(extractedName)) {
+          modelName = extractedName;
+          console.log(`[BRIEFING API] Using model: ${modelName} (from available models)`);
+        } else {
+          // If listModels returned an old model, use our correct models instead
+          modelName = correctModels[0];
+          console.log(`[BRIEFING API] ListModels returned old model (${extractedName}), using correct model: ${modelName}`);
+        }
         console.log(`[BRIEFING API] Model display name: ${supportedModel.displayName || 'N/A'}`);
         console.log(`[BRIEFING API] Supported methods: ${(supportedModel.supportedGenerationMethods || []).join(', ')}`);
       } else {
-        // Fallback: try the first available model
-        if (availableModels.length > 0) {
-          const firstModel = availableModels[0];
-          const fullName = firstModel.name || firstModel;
-          modelName = fullName.replace(/^models\//, '');
-          console.log(`[BRIEFING API] Using first available model: ${modelName}`);
-        } else {
-          // Last resort: try available model names
-          const fallbackModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro'];
-          modelName = fallbackModels[0];
-          console.log(`[BRIEFING API] No models in list, using fallback: ${modelName}`);
-        }
+        // Fallback: use our correct models
+        modelName = correctModels[0];
+        console.log(`[BRIEFING API] No supported model found, using: ${modelName}`);
       }
     } catch (listError: any) {
       console.error('[BRIEFING API] Failed to list models:', listError);
       console.error('[BRIEFING API] Error details:', listError.message);
       console.error('[BRIEFING API] Error stack:', listError.stack);
-      // Fallback to available models
-      modelName = 'gemini-3-pro-preview';
+      // Fallback to correct models
+      modelName = correctModels[0];
       console.log(`[BRIEFING API] Using fallback model: ${modelName}`);
     }
     
@@ -158,10 +161,10 @@ Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY t
     let result;
     let lastError: any = null;
     
-    // Try generating with the selected model, with fallback to other available models if it fails
-    const availableModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro'];
-    const fallbackModels = [modelName, ...availableModels];
+    // Try generating with the selected model, with fallback to other correct models if it fails
+    const fallbackModels = [modelName, ...correctModels];
     const uniqueModels = [...new Set(fallbackModels)]; // Remove duplicates
+    console.log(`[BRIEFING API] Will try models in order: ${uniqueModels.join(', ')}`);
     
     for (let i = 0; i < uniqueModels.length; i++) {
       try {
