@@ -134,21 +134,25 @@ Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY t
 
     console.log(`[BRIEFING API] Generating content with Gemini using model: ${modelName}...`);
     let result;
+    let lastError: any = null;
     
-    // Try generating with current model, fallback to others if it fails
-    for (let i = 0; i < modelNames.length; i++) {
+    // Try generating with the selected model, with fallback to other models if it fails
+    const fallbackModels = [modelName, 'gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const uniqueModels = [...new Set(fallbackModels)]; // Remove duplicates
+    
+    for (let i = 0; i < uniqueModels.length; i++) {
       try {
-        const currentModel = genAI.getGenerativeModel({ model: modelNames[i] });
+        const currentModel = genAI.getGenerativeModel({ model: uniqueModels[i] });
         result = await currentModel.generateContent(systemPrompt);
-        modelName = modelNames[i];
+        modelName = uniqueModels[i];
         console.log(`[BRIEFING API] Successfully generated content with: ${modelName}`);
         break;
       } catch (modelError: any) {
-        console.error(`[BRIEFING API] Model ${modelNames[i]} failed:`, modelError.message);
+        console.error(`[BRIEFING API] Model ${uniqueModels[i]} failed:`, modelError.message);
         lastError = modelError;
-        if (i === modelNames.length - 1) {
+        if (i === uniqueModels.length - 1) {
           // Last model failed, throw error
-          throw new Error(`All models failed. Tried: ${modelNames.join(', ')}. Last error: ${modelError.message}`);
+          throw new Error(`All models failed. Tried: ${uniqueModels.join(', ')}. Last error: ${modelError.message}`);
         }
         continue;
       }
