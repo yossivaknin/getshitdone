@@ -91,7 +91,17 @@ CRITICAL: You MUST respond with ONLY valid JSON in this exact format:
 Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY the JSON object.`;
 
     console.log('[BRIEFING API] Generating content with Gemini...');
-    const result = await model.generateContent(systemPrompt);
+    let result;
+    try {
+      result = await model.generateContent(systemPrompt);
+    } catch (modelError: any) {
+      console.error('[BRIEFING API] Error with gemini-1.5-pro-latest, trying gemini-1.5-flash-latest...', modelError);
+      // Fallback to flash model if pro fails
+      const flashModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+      result = await flashModel.generateContent(systemPrompt);
+      console.log('[BRIEFING API] Successfully used gemini-1.5-flash-latest');
+    }
+    
     const response = await result.response;
     const text = response.text();
     console.log('[BRIEFING API] Received response from Gemini (length:', text.length, 'chars)');
