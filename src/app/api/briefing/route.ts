@@ -35,17 +35,10 @@ export async function GET() {
 
     console.log('[BRIEFING API] Initializing Gemini AI...');
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Try gemini-1.5-pro first, fallback to gemini-pro
-    // Available models: gemini-pro, gemini-1.5-pro, gemini-1.5-flash-latest
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-      console.log('[BRIEFING API] Model initialized: gemini-1.5-pro');
-    } catch (e) {
-      console.log('[BRIEFING API] Falling back to gemini-pro');
-      model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-      console.log('[BRIEFING API] Model initialized: gemini-pro');
-    }
+    // Use gemini-pro (most stable and widely available)
+    // Alternative models: gemini-1.5-pro, gemini-1.5-flash-latest (may not be available in all regions)
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    console.log('[BRIEFING API] Model initialized: gemini-pro');
 
     // Format mock data for AI
     const calendarText = calendarEvents
