@@ -43,22 +43,10 @@ export async function GET() {
     let modelName = '';
     let lastError: any = null;
     
-    for (const name of modelNames) {
-      try {
-        model = genAI.getGenerativeModel({ model: name });
-        modelName = name;
-        console.log(`[BRIEFING API] Model initialized: ${name}`);
-        break;
-      } catch (err: any) {
-        console.log(`[BRIEFING API] Model ${name} failed, trying next...`, err.message);
-        lastError = err;
-        continue;
-      }
-    }
-    
-    if (!model) {
-      throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(', ')}. Last error: ${lastError?.message || 'Unknown'}`);
-    }
+    // Initialize with first model (we'll test it when generating)
+    model = genAI.getGenerativeModel({ model: modelNames[0] });
+    modelName = modelNames[0];
+    console.log(`[BRIEFING API] Model initialized: ${modelName}`);
 
     // Format mock data for AI
     const calendarText = calendarEvents
@@ -108,7 +96,26 @@ CRITICAL: You MUST respond with ONLY valid JSON in this exact format:
 Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY the JSON object.`;
 
     console.log(`[BRIEFING API] Generating content with Gemini using model: ${modelName}...`);
-    const result = await model.generateContent(systemPrompt);
+    let result;
+    
+    // Try generating with current model, fallback to others if it fails
+    for (let i = 0; i < modelNames.length; i++) {
+      try {
+        const currentModel = genAI.getGenerativeModel({ model: modelNames[i] });
+        result = await currentModel.generateContent(systemPrompt);
+        modelName = modelNames[i];
+        console.log(`[BRIEFING API] Successfully generated content with: ${modelName}`);
+        break;
+      } catch (modelError: any) {
+        console.error(`[BRIEFING API] Model ${modelNames[i]} failed:`, modelError.message);
+        lastError = modelError;
+        if (i === modelNames.length - 1) {
+          // Last model failed, throw error
+          throw new Error(`All models failed. Tried: ${modelNames.join(', ')}. Last error: ${modelError.message}`);
+        }
+        continue;
+      }
+    }
     
     const response = await result.response;
     const text = response.text();
