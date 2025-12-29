@@ -68,7 +68,12 @@ export function Column({ title, tasks, id, workspaceId, onCreateTask, onUpdateTa
                 <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     {tasks.length === 0 ? (
                         <div className="h-24 sm:h-32 border-2 border-dashed border-gray-200 rounded-md flex flex-col gap-1.5 sm:gap-2 items-center justify-center text-xs sm:text-sm text-gray-400 bg-gray-50/50 px-2">
-                            <span className="text-center">{id === 'done' ? 'Sector Clear' : id === 'in-progress' ? 'Awaiting Orders' : 'No tasks yet'}</span>
+                            <span className="text-center">
+                                {id === 'done' ? 'Sector Clear' : 
+                                 id === 'today' ? 'No tasks for today' :
+                                 id === 'this-week' ? 'No tasks this week' :
+                                 id === 'queue' ? 'No tasks in queue' : 'No tasks yet'}
+                            </span>
                             <CreateTaskDialog 
                                 listId={id} 
                                 workspaceId={workspaceId} 

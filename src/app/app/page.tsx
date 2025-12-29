@@ -14,11 +14,12 @@ import toast from 'react-hot-toast';
 import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 import { Logo } from '@/components/logo';
 
-// Kanban columns (these are the status columns - unified across all lists)
+// Kanban columns - tasks are automatically categorized by due date in the Board component
 const kanbanColumns = [
-  { id: 'todo', title: 'The Queue' },
-  { id: 'in-progress', title: 'Active' },
-  { id: 'done', title: 'Shipped' }
+  { id: 'queue', title: 'QUEUE' },
+  { id: 'today', title: 'TODAY' },
+  { id: 'this-week', title: 'THIS WEEK' },
+  { id: 'done', title: 'DONE' }
 ];
 
 export default function UnifiedViewPage() {

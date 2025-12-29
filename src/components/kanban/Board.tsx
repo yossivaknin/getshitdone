@@ -38,8 +38,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const [tasks, setTasks] = useState(initialTasks);
     const skipSyncRef = useRef(false);
     const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);
-    const [createDialogListId, setCreateDialogListId] = useState<string>('todo'); // Default to first column
-    const [mobileSelectedTab, setMobileSelectedTab] = useState<string>('todo'); // Mobile tab selection
+    const [createDialogListId, setCreateDialogListId] = useState<string>('queue'); // Default to first column
+    const [mobileSelectedTab, setMobileSelectedTab] = useState<string>('queue'); // Mobile tab selection
     const [isMobile, setIsMobile] = useState(false); // Track if we're on mobile
     
     // Use external control if provided, otherwise use internal state
@@ -95,11 +95,12 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const [activeTask, setActiveTask] = useState<any>(null);
     
     // Helper function to map UI column IDs to database status values
-    // UI uses 'in-progress' (hyphen), DB uses 'in_progress' (underscore)
+    // New columns: queue, today, this-week, done
     // Memoized to avoid recreation on every render
     const mapListIdToStatus = useCallback((listId: string): string => {
-        if (listId === 'in-progress') return 'in_progress';
-        return listId; // 'todo' and 'done' are the same
+        if (listId === 'done') return 'done';
+        // All other columns (queue, today, this-week) map to 'todo' status
+        return 'todo';
     }, []);
     
     // Detect mobile breakpoint and disable DND on mobile
@@ -146,10 +147,69 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         );
     }, [tasks, selectedTag]);
     
+    /**
+     * Categorize a task into the appropriate column based on due date and status
+     */
+    const categorizeTask = useCallback((task: any): string => {
+        // DONE tasks always go to DONE column
+        if (task.status === 'done' || task.status === 'shipped') {
+            return 'done';
+        }
+
+        // If no due date, it goes to QUEUE
+        if (!task.dueDate) {
+            return 'queue';
+        }
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(today.getDate() + (7 - today.getDay())); // End of week (Sunday)
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        // Parse due date
+        let dueDate: Date;
+        if (typeof task.dueDate === 'string') {
+            // Handle relative dates like "today", "tomorrow"
+            const lowerDate = task.dueDate.toLowerCase();
+            if (lowerDate === 'today') {
+                dueDate = today;
+            } else if (lowerDate === 'tomorrow') {
+                dueDate = new Date(today);
+                dueDate.setDate(today.getDate() + 1);
+            } else {
+                dueDate = new Date(task.dueDate);
+            }
+        } else {
+            dueDate = new Date(task.dueDate);
+        }
+
+        // Set to start of day for comparison
+        const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+
+        // TODAY: due date is today
+        if (dueDateStart.getTime() === today.getTime()) {
+            return 'today';
+        }
+
+        // THIS WEEK: due date is between tomorrow and end of week
+        if (dueDateStart > today && dueDateStart <= endOfWeek) {
+            return 'this-week';
+        }
+
+        // QUEUE: due date is in the future (beyond this week) or in the past (overdue)
+        return 'queue';
+    }, []);
+
     // Memoize task grouping to avoid recalculating on every render
+    // Tasks are automatically categorized based on due dates
     const tasksByList = useMemo(() => {
         const grouped = (initialLists || []).reduce((acc: any, list: any) => {
-            const tasksForList = (filteredTasks || []).filter((task: any) => task.list_id === list.id);
+            // Categorize each task and filter by the target column
+            const tasksForList = (filteredTasks || []).filter((task: any) => {
+                const category = categorizeTask(task);
+                return category === list.id;
+            });
             acc[list.id] = tasksForList;
             
             // Debug logging (only in development)
@@ -164,12 +224,12 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             return acc;
         }, {});
         return grouped;
-    }, [filteredTasks, initialLists]);
+    }, [filteredTasks, initialLists, categorizeTask]);
 
     const handleCreateTask = useCallback(async (newTask: any) => {
         try {
             // Map list_id to status for database
-            const listId = newTask.list_id || 'todo';
+            const listId = newTask.list_id || 'queue';
             const status = mapListIdToStatus(listId);
             
             const result = await createTask({
@@ -217,7 +277,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const handleUpdateTask = useCallback(async (updatedTask: any) => {
         try {
             // Map list_id to status for database
-            const listId = updatedTask.list_id || updatedTask.status || 'todo';
+            const listId = updatedTask.list_id || updatedTask.status || 'queue';
             const status = mapListIdToStatus(listId);
             
             const result = await updateTask(updatedTask.id, {
@@ -408,7 +468,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             return;
         }
 
-        const oldListId = task.list_id;
+        // Use categorization to determine current column
+        const oldListId = categorizeTask(task);
         
         // Determine the target column ID
         // If dropped on another task, find which column that task belongs to
@@ -423,10 +484,11 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             // Dropped directly on column
             newListId = overId;
         } else {
-            // Dropped on another task - find which column that task is in
+            // Dropped on another task - find which column that task is in using categorization
             const targetTask = tasks.find((t: any) => t.id === overId);
             if (targetTask) {
-                newListId = targetTask.list_id;
+                // Use categorization to determine the column
+                newListId = categorizeTask(targetTask);
             } else {
                 console.warn('[DRAG] Could not determine target column for:', overId);
                 return;
@@ -448,22 +510,56 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         const isMovingToDone = newListId === 'done';
         const isMovingFromDone = oldListId === 'done';
 
-        // Update task status in database
+        // Calculate new due date based on target column
+        let newDueDate = task.dueDate;
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        if (newListId === 'today') {
+            // Set due date to today
+            newDueDate = today.toISOString().split('T')[0];
+        } else if (newListId === 'this-week') {
+            // Set due date to end of week (Sunday)
+            const endOfWeek = new Date(today);
+            endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+            newDueDate = endOfWeek.toISOString().split('T')[0];
+        } else if (newListId === 'queue') {
+            // Clear due date or set to far future
+            newDueDate = null; // or set to a far future date
+        }
+        // For 'done', keep the existing due date
+
+        // Update task in database (status and due date)
         try {
-            const result = await updateTaskStatus(taskId, newStatus);
+            // Use updateTask to update both status and due date
+            const { updateTask } = await import('@/app/actions');
+            const updateData: any = {
+                status: newStatus
+            };
+            // Only include dueDate if it's not null (null means clear it, undefined means don't change)
+            if (newDueDate !== undefined) {
+                updateData.dueDate = newDueDate || null; // null to clear, or a date string
+            }
+            const result = await updateTask(taskId, updateData);
+            
             if (result.error) {
-                console.error('[DRAG] Error updating task status:', result.error);
-                toast.error('Failed to update task status');
+                console.error('[DRAG] Error updating task:', result.error);
+                toast.error('Failed to update task');
                 return; // Don't update UI if database update failed
             }
         } catch (error) {
-            console.error('[DRAG] Error updating task status:', error);
-            toast.error('Failed to update task status');
+            console.error('[DRAG] Error updating task:', error);
+            toast.error('Failed to update task');
             return;
         }
 
-        // Update task list_id IMMEDIATELY (after successful DB update)
-        let updatedTask = { ...task, list_id: newListId };
+        // Update task IMMEDIATELY (after successful DB update)
+        let updatedTask = { 
+            ...task, 
+            list_id: newListId,
+            status: newStatus,
+            dueDate: newDueDate
+        };
         
         // Update task in state IMMEDIATELY so it appears in the new column
         // Use functional update to ensure we have the latest state
@@ -499,7 +595,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 console.error('[DRAG] Error re-scheduling task:', error);
             });
         }
-    }, [tasks, mapListIdToStatus, initialLists, updateTasks, handleDeleteCalendarEvents, handleRescheduleTask]);
+    }, [tasks, mapListIdToStatus, initialLists, updateTasks, handleDeleteCalendarEvents, handleRescheduleTask, categorizeTask]);
 
     // Get tags from props (pre-loaded) or load from cache/database
     // Start with preloaded tags if available, otherwise empty array
@@ -726,10 +822,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                     <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                         {initialLists.map((list) => {
                             const isActive = mobileSelectedTab === list.id;
-                            // Map list IDs to display names
-                            const displayName = list.id === 'todo' ? 'QUEUE' : 
-                                              list.id === 'in-progress' ? 'ACTIVE' : 
-                                              list.id === 'done' ? 'SHIPPED' : list.title.toUpperCase();
+                            // Use the list title directly (already uppercase)
+                            const displayName = list.title.toUpperCase();
                             
                             return (
                                 <button
