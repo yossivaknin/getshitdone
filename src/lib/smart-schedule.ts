@@ -188,6 +188,7 @@ export async function smartSchedule(
   
   console.log(`[SMART-SCHEDULE] Days until due date: ${daysUntilDue}`);
   console.log(`[SMART-SCHEDULE] Number of chunks: ${chunks.length}`);
+  console.log(`[SMART-SCHEDULE] ⚠️ BUFFER RULE: Minimum 2-hour gap required between chunks`);
   console.log(`[SMART-SCHEDULE] Will distribute chunks across different days when possible`);
   
   for (let i = 0; i < chunks.length; i++) {
@@ -198,11 +199,14 @@ export async function smartSchedule(
     console.log(`[SMART-SCHEDULE] Days with chunks so far: ${Array.from(daysWithChunks).join(', ') || 'none'}`);
     console.log(`[SMART-SCHEDULE] Total busy slots: ${scheduledSlots.length}`);
     
-    // Log all busy slots for debugging
+    // Log all busy slots for debugging (including buffer periods)
     if (scheduledSlots.length > 0) {
-      console.log(`[SMART-SCHEDULE] Busy slots:`, scheduledSlots.map(s => 
-        `${new Date(s.start).toISOString()} - ${new Date(s.end).toISOString()}`
-      ));
+      console.log(`[SMART-SCHEDULE] All busy slots (including buffers):`);
+      scheduledSlots.forEach((s, idx) => {
+        const isBuffer = idx >= busySlots.length && (idx - busySlots.length) % 2 === 1;
+        const label = isBuffer ? '[BUFFER]' : '[CHUNK/BUSY]';
+        console.log(`  ${label} ${new Date(s.start).toISOString()} - ${new Date(s.end).toISOString()}`);
+      });
     }
     
     // Find free slots, excluding already scheduled chunks
@@ -214,7 +218,7 @@ export async function smartSchedule(
     console.log(`[SMART-SCHEDULE]   chunkDuration: ${chunkDuration} minutes`);
     
     let freeSlots = findFreeSlots(
-      scheduledSlots, // Use scheduledSlots which includes previously scheduled chunks
+      scheduledSlots, // Use scheduledSlots which includes previously scheduled chunks AND buffer periods
       currentTime,
       dueDate,
       config.workingHoursStart,
@@ -223,7 +227,21 @@ export async function smartSchedule(
       userTimezone // CRITICAL: Pass user's timezone!
     );
     
-    console.log(`[SMART-SCHEDULE] Found ${freeSlots.length} free slot(s) for chunk ${i + 1}`);
+    // CRITICAL: Filter out any slots that start before currentTime (which includes the 2-hour buffer)
+    // This ensures we respect the minimum 2-hour gap between chunks
+    if (i > 0) {
+      const minStartTime = currentTime.getTime();
+      freeSlots = freeSlots.filter(slot => {
+        const slotStartTime = slot.start.getTime();
+        const isAfterBuffer = slotStartTime >= minStartTime;
+        if (!isAfterBuffer) {
+          console.log(`[SMART-SCHEDULE] Filtered out slot starting at ${slot.start.toISOString()} (before buffer end at ${currentTime.toISOString()})`);
+        }
+        return isAfterBuffer;
+      });
+    }
+    
+    console.log(`[SMART-SCHEDULE] Found ${freeSlots.length} free slot(s) for chunk ${i + 1} (after filtering for 2-hour buffer)`);
     
     // If we have multiple chunks and there's time before due date, prefer slots on new days
     if (chunks.length > 1 && daysUntilDue >= chunks.length) {
@@ -249,6 +267,24 @@ export async function smartSchedule(
     
     // Use the first available slot
     const selectedSlot = freeSlots[0];
+    
+    // Validate that this slot starts after the buffer period (if not the first chunk)
+    if (i > 0) {
+      const minStartTime = currentTime.getTime();
+      const slotStartTime = selectedSlot.start.getTime();
+      if (slotStartTime < minStartTime) {
+        console.error(`[SMART-SCHEDULE] ❌ ERROR: Selected slot starts before buffer period ends!`);
+        console.error(`[SMART-SCHEDULE] Slot starts at: ${selectedSlot.start.toISOString()}`);
+        console.error(`[SMART-SCHEDULE] Buffer period ends at: ${currentTime.toISOString()}`);
+        return {
+          success: false,
+          eventsCreated: 0,
+          message: `Failed to find a slot with 2-hour buffer. Please adjust your task duration or due date.`
+        };
+      }
+      const bufferGap = (slotStartTime - minStartTime) / (1000 * 60); // Gap in minutes
+      console.log(`[SMART-SCHEDULE] ✅ Verified: Slot starts ${bufferGap.toFixed(1)} minutes after buffer period ends (minimum 0 minutes required)`);
+    }
     
     console.log('[SMART-SCHEDULE] ========== SELECTING SLOT ==========');
     console.log('[SMART-SCHEDULE] Total available slots:', freeSlots.length);
@@ -280,7 +316,10 @@ export async function smartSchedule(
     console.log('[SMART-SCHEDULE]   1. It is the first available slot found');
     console.log('[SMART-SCHEDULE]   2. It is within working hours:', config.workingHoursStart, '-', config.workingHoursEnd);
     console.log('[SMART-SCHEDULE]   3. It does not conflict with any busy slots');
-    console.log('[SMART-SCHEDULE]   4. It has sufficient duration:', duration, 'minutes');
+    console.log('[SMART-SCHEDULE]   4. It has sufficient duration:', chunkDuration, 'minutes');
+    if (i > 0) {
+      console.log('[SMART-SCHEDULE]   5. It maintains 2-hour minimum buffer from previous chunk');
+    }
     console.log('[SMART-SCHEDULE] ====================================');
     
     // CRITICAL: Double-check that the selected slot doesn't conflict with ANY busy slot
@@ -372,10 +411,22 @@ export async function smartSchedule(
       start: new Date(selectedSlot.start),
       end: new Date(selectedSlot.end)
     });
+    
+    // Add 2-hour buffer period after this chunk as a "busy" slot
+    // This ensures the next chunk can't be scheduled too close
+    const bufferStart = new Date(selectedSlot.end);
+    const bufferEnd = new Date(selectedSlot.end.getTime() + 2 * 60 * 60 * 1000); // 2 hours after chunk ends
+    scheduledSlots.push({
+      start: bufferStart,
+      end: bufferEnd
+    });
+    
     // Sort scheduled slots for efficient conflict checking
     scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
     
-    console.log(`[SMART-SCHEDULE] Added slot to busy list. Total busy slots now: ${scheduledSlots.length}`);
+    console.log(`[SMART-SCHEDULE] Added chunk slot to busy list`);
+    console.log(`[SMART-SCHEDULE] Added 2-hour buffer period (${bufferStart.toISOString()} to ${bufferEnd.toISOString()}) to busy list`);
+    console.log(`[SMART-SCHEDULE] Total busy slots now: ${scheduledSlots.length}`);
     
     // For next chunk, if we have multiple chunks and there's time, move to next day
     if (chunks.length > 1 && i < chunks.length - 1 && daysUntilDue >= chunks.length) {
@@ -385,14 +436,19 @@ export async function smartSchedule(
       currentTime.setHours(startHour, startMin, 0, 0);
       console.log(`[SMART-SCHEDULE] Moving to next day for next chunk: ${currentTime.toISOString()}`);
     } else {
-      // Next chunk starts after this one ends (with a small buffer)
-      // Use a minimum gap of 15 minutes between chunks
-      const minGap = 15 * 60 * 1000; // 15 minutes minimum gap
+      // Next chunk starts after this one ends (with a minimum 2-hour buffer)
+      // Use a minimum gap of 2 hours between chunks
+      const minGap = 2 * 60 * 60 * 1000; // 2 hours minimum gap (120 minutes)
       currentTime = new Date(selectedSlot.end.getTime() + minGap);
       
+      console.log(`[SMART-SCHEDULE] Next chunk must start at least 2 hours after this chunk ends`);
+      console.log(`[SMART-SCHEDULE] This chunk ends at: ${selectedSlot.end.toISOString()}`);
+      console.log(`[SMART-SCHEDULE] Next chunk search starts at: ${currentTime.toISOString()} (2 hours later)`);
+      
       // If we've moved past working hours, move to next day's start
-      if (currentTime.getHours() >= endHour || 
-          (currentTime.getHours() === endHour && currentTime.getMinutes() >= endMin)) {
+      const currentLocal = getLocalTime(currentTime);
+      if (currentLocal.hour >= endHour || 
+          (currentLocal.hour === endHour && currentLocal.minute >= endMin)) {
         // Move to next day at working hours start
         currentTime.setDate(currentTime.getDate() + 1);
         currentTime.setHours(startHour, startMin, 0, 0);

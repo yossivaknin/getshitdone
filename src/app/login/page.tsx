@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { login, signup, loginWithGoogle } from "./actions";
 import { useSearchParams } from 'next/navigation';
 import { Chrome } from 'lucide-react';
+import { Logo } from '@/components/logo';
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
@@ -29,12 +30,24 @@ export default function LoginPage() {
       <div className="w-full md:w-1/2 bg-slate-900 flex items-center justify-center p-8 md:p-12 lg:p-16">
         <div className="max-w-md space-y-8">
           <div className="space-y-4">
-            <h1 
-              className="text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight"
-              style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}
-            >
-              SITREP // HQ
-            </h1>
+            <div className="flex items-center gap-3">
+              {/* The Icon */}
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-sm bg-white text-emerald-500">
+                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              
+              {/* The Text */}
+              <div className="flex items-baseline gap-1">
+                <span className="font-space-grotesk text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white">
+                  SITREP
+                </span>
+                <span className="font-mono text-lg md:text-xl font-medium text-slate-300">
+                  // HQ
+                </span>
+              </div>
+            </div>
             <h2 className="text-xl md:text-2xl text-emerald-400 font-mono uppercase tracking-widest">
               Command Your Day.
             </h2>

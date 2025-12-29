@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Board } from "@/components/kanban/Board";
 import { MissionStatus } from "@/components/mission-status";
 import { MotivatorSubtitle } from "@/components/motivator-subtitle";
+import { MorningBriefing } from "@/components/dashboard/MorningBriefing";
 import Link from 'next/link';
 import { Settings, ChevronRight, ChevronLeft, Target, LogOut, Plus } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
@@ -11,6 +12,7 @@ import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useTokenRefresh } from '@/hooks/useTokenRefresh';
+import { Logo } from '@/components/logo';
 
 // Kanban columns (these are the status columns - unified across all lists)
 const kanbanColumns = [
@@ -257,8 +259,8 @@ export default function UnifiedViewPage() {
   return (
     <div className="h-screen flex flex-col bg-[#F4F5F7]">
       <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5 lg:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-transparent border-b border-gray-200">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}>Mission Control</h1>
+        <div className="flex-1 min-w-0 flex items-center gap-4">
+          <Logo />
           <p className="font-mono text-xs uppercase tracking-widest text-slate-500 mt-0.5 sm:mt-1">
             <MotivatorSubtitle tasks={tasks} />
           </p>
@@ -291,6 +293,11 @@ export default function UnifiedViewPage() {
           </form>
         </div>
       </header>
+      
+      {/* Morning Briefing Widget */}
+      <div className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 border-b border-gray-200">
+        <MorningBriefing />
+      </div>
       
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Main Content - Unified Kanban Board */}
