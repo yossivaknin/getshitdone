@@ -35,8 +35,9 @@ export async function GET() {
 
     console.log('[BRIEFING API] Initializing Gemini AI...');
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    console.log('[BRIEFING API] Model initialized');
+    // Use gemini-pro or gemini-1.5-pro-latest (flash might not be available in all regions)
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    console.log('[BRIEFING API] Model initialized: gemini-pro');
 
     // Format mock data for AI
     const calendarText = calendarEvents
