@@ -36,16 +36,40 @@ export async function GET() {
     console.log('[BRIEFING API] Initializing Gemini AI...');
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Try different model names - the API might not support -latest suffix
-    // Try in order: gemini-1.5-pro, gemini-1.5-flash, gemini-pro
-    const modelNames = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'];
-    let model;
+    // First, list available models to find one that works
+    console.log('[BRIEFING API] Listing available models...');
+    let availableModels: any[] = [];
     let modelName = '';
-    let lastError: any = null;
     
-    // Initialize with first model (we'll test it when generating)
-    model = genAI.getGenerativeModel({ model: modelNames[0] });
-    modelName = modelNames[0];
+    try {
+      const modelsResponse = await genAI.listModels();
+      availableModels = modelsResponse.models || [];
+      console.log(`[BRIEFING API] Found ${availableModels.length} available models`);
+      
+      // Find a model that supports generateContent
+      const supportedModel = availableModels.find((m: any) => 
+        m.supportedGenerationMethods?.includes('generateContent') ||
+        m.supportedGenerationMethods?.includes('GENERATE_CONTENT')
+      );
+      
+      if (supportedModel) {
+        // Extract model name (format: models/gemini-pro or just gemini-pro)
+        modelName = supportedModel.name.replace('models/', '');
+        console.log(`[BRIEFING API] Using model: ${modelName} (from available models)`);
+      } else {
+        // Fallback: try common model names
+        const fallbackModels = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+        modelName = fallbackModels[0];
+        console.log(`[BRIEFING API] No model found in list, using fallback: ${modelName}`);
+      }
+    } catch (listError: any) {
+      console.error('[BRIEFING API] Failed to list models:', listError);
+      // Fallback to gemini-pro
+      modelName = 'gemini-pro';
+      console.log(`[BRIEFING API] Using fallback model: ${modelName}`);
+    }
+    
+    const model = genAI.getGenerativeModel({ model: modelName });
     console.log(`[BRIEFING API] Model initialized: ${modelName}`);
 
     // Format mock data for AI
