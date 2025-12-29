@@ -167,25 +167,34 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
         endOfWeek.setDate(today.getDate() + (7 - today.getDay())); // End of week (Sunday)
         endOfWeek.setHours(23, 59, 59, 999);
 
-        // Parse due date
-        let dueDate: Date;
+        // Parse due date - handle YYYY-MM-DD format correctly (avoid UTC timezone issues)
+        let dueDateStart: Date;
         if (typeof task.dueDate === 'string') {
             // Handle relative dates like "today", "tomorrow"
             const lowerDate = task.dueDate.toLowerCase();
             if (lowerDate === 'today') {
-                dueDate = today;
+                dueDateStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
             } else if (lowerDate === 'tomorrow') {
-                dueDate = new Date(today);
-                dueDate.setDate(today.getDate() + 1);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(today.getDate() + 1);
+                dueDateStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+            } else if (task.dueDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                // YYYY-MM-DD format - parse as local date to avoid UTC issues
+                const [year, month, day] = task.dueDate.split('-').map(Number);
+                dueDateStart = new Date(year, month - 1, day); // month is 0-indexed
             } else {
-                dueDate = new Date(task.dueDate);
+                // Try to parse as date string
+                const parsed = new Date(task.dueDate);
+                dueDateStart = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
             }
+        } else if (task.dueDate instanceof Date) {
+            dueDateStart = new Date(task.dueDate.getFullYear(), task.dueDate.getMonth(), task.dueDate.getDate());
         } else {
-            dueDate = new Date(task.dueDate);
+            // Fallback
+            dueDateStart = new Date(today);
         }
 
-        // Set to start of day for comparison (normalize to local midnight)
-        const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        // Normalize to start of day for comparison
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         
         // Calculate days difference (positive = future, 0 = today, negative = past)
@@ -193,11 +202,11 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
         console.log('[CATEGORIZE] Task categorization:', {
             taskTitle: task.title,
-            dueDate: task.dueDate,
-            dueDateStart: dueDateStart.toISOString().split('T')[0],
-            todayStart: todayStart.toISOString().split('T')[0],
+            dueDateRaw: task.dueDate,
+            dueDateStart: `${dueDateStart.getFullYear()}-${String(dueDateStart.getMonth() + 1).padStart(2, '0')}-${String(dueDateStart.getDate()).padStart(2, '0')}`,
+            todayStart: `${todayStart.getFullYear()}-${String(todayStart.getMonth() + 1).padStart(2, '0')}-${String(todayStart.getDate()).padStart(2, '0')}`,
             daysDiff: daysDiff,
-            endOfWeek: endOfWeek.toISOString().split('T')[0]
+            endOfWeek: `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`
         });
 
         // TODAY: due date is exactly today (daysDiff === 0)
