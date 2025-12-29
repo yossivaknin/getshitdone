@@ -45,25 +45,38 @@ export async function GET() {
       const modelsResponse = await genAI.listModels();
       availableModels = modelsResponse.models || [];
       console.log(`[BRIEFING API] Found ${availableModels.length} available models`);
+      console.log('[BRIEFING API] Available model names:', availableModels.map((m: any) => m.name));
       
       // Find a model that supports generateContent
-      const supportedModel = availableModels.find((m: any) => 
-        m.supportedGenerationMethods?.includes('generateContent') ||
-        m.supportedGenerationMethods?.includes('GENERATE_CONTENT')
-      );
+      // Model names might be in format: "models/gemini-pro" or just "gemini-pro"
+      const supportedModel = availableModels.find((m: any) => {
+        const methods = m.supportedGenerationMethods || [];
+        return methods.includes('generateContent') || 
+               methods.includes('GENERATE_CONTENT') ||
+               methods.length > 0; // If it has any methods, try it
+      });
       
       if (supportedModel) {
         // Extract model name (format: models/gemini-pro or just gemini-pro)
-        modelName = supportedModel.name.replace('models/', '');
+        modelName = supportedModel.name.replace(/^models\//, '');
         console.log(`[BRIEFING API] Using model: ${modelName} (from available models)`);
+        console.log(`[BRIEFING API] Model display name: ${supportedModel.displayName || 'N/A'}`);
+        console.log(`[BRIEFING API] Supported methods: ${(supportedModel.supportedGenerationMethods || []).join(', ')}`);
       } else {
-        // Fallback: try common model names
-        const fallbackModels = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-        modelName = fallbackModels[0];
-        console.log(`[BRIEFING API] No model found in list, using fallback: ${modelName}`);
+        // Fallback: try the first available model
+        if (availableModels.length > 0) {
+          modelName = availableModels[0].name.replace(/^models\//, '');
+          console.log(`[BRIEFING API] Using first available model: ${modelName}`);
+        } else {
+          // Last resort: try common model names
+          const fallbackModels = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+          modelName = fallbackModels[0];
+          console.log(`[BRIEFING API] No models in list, using fallback: ${modelName}`);
+        }
       }
     } catch (listError: any) {
       console.error('[BRIEFING API] Failed to list models:', listError);
+      console.error('[BRIEFING API] Error details:', listError.message);
       // Fallback to gemini-pro
       modelName = 'gemini-pro';
       console.log(`[BRIEFING API] Using fallback model: ${modelName}`);
