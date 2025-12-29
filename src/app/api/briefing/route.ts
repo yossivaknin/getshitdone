@@ -89,8 +89,8 @@ export async function GET() {
           modelName = fullName.replace(/^models\//, '');
           console.log(`[BRIEFING API] Using first available model: ${modelName}`);
         } else {
-          // Last resort: try common model names
-          const fallbackModels = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+          // Last resort: try available model names
+          const fallbackModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro'];
           modelName = fallbackModels[0];
           console.log(`[BRIEFING API] No models in list, using fallback: ${modelName}`);
         }
@@ -99,8 +99,8 @@ export async function GET() {
       console.error('[BRIEFING API] Failed to list models:', listError);
       console.error('[BRIEFING API] Error details:', listError.message);
       console.error('[BRIEFING API] Error stack:', listError.stack);
-      // Fallback to gemini-pro
-      modelName = 'gemini-pro';
+      // Fallback to available models
+      modelName = 'gemini-3-pro-preview';
       console.log(`[BRIEFING API] Using fallback model: ${modelName}`);
     }
     
@@ -158,8 +158,9 @@ Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY t
     let result;
     let lastError: any = null;
     
-    // Try generating with the selected model, with fallback to other models if it fails
-    const fallbackModels = [modelName, 'gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Try generating with the selected model, with fallback to other available models if it fails
+    const availableModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro'];
+    const fallbackModels = [modelName, ...availableModels];
     const uniqueModels = [...new Set(fallbackModels)]; // Remove duplicates
     
     for (let i = 0; i < uniqueModels.length; i++) {
