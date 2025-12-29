@@ -36,12 +36,29 @@ export async function GET() {
     console.log('[BRIEFING API] Initializing Gemini AI...');
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Use the latest model names - these should work with the current API
-    // Try gemini-1.5-pro-latest first (most capable), fallback to gemini-1.5-flash-latest (faster)
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-pro-latest' 
-    });
-    console.log('[BRIEFING API] Model initialized: gemini-1.5-pro-latest');
+    // Try different model names - the API might not support -latest suffix
+    // Try in order: gemini-1.5-pro, gemini-1.5-flash, gemini-pro
+    const modelNames = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'];
+    let model;
+    let modelName = '';
+    let lastError: any = null;
+    
+    for (const name of modelNames) {
+      try {
+        model = genAI.getGenerativeModel({ model: name });
+        modelName = name;
+        console.log(`[BRIEFING API] Model initialized: ${name}`);
+        break;
+      } catch (err: any) {
+        console.log(`[BRIEFING API] Model ${name} failed, trying next...`, err.message);
+        lastError = err;
+        continue;
+      }
+    }
+    
+    if (!model) {
+      throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(', ')}. Last error: ${lastError?.message || 'Unknown'}`);
+    }
 
     // Format mock data for AI
     const calendarText = calendarEvents
@@ -90,17 +107,8 @@ CRITICAL: You MUST respond with ONLY valid JSON in this exact format:
 
 Do NOT include any markdown formatting, code blocks, or explanatory text. ONLY the JSON object.`;
 
-    console.log('[BRIEFING API] Generating content with Gemini...');
-    let result;
-    try {
-      result = await model.generateContent(systemPrompt);
-    } catch (modelError: any) {
-      console.error('[BRIEFING API] Error with gemini-1.5-pro-latest, trying gemini-1.5-flash-latest...', modelError);
-      // Fallback to flash model if pro fails
-      const flashModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
-      result = await flashModel.generateContent(systemPrompt);
-      console.log('[BRIEFING API] Successfully used gemini-1.5-flash-latest');
-    }
+    console.log(`[BRIEFING API] Generating content with Gemini using model: ${modelName}...`);
+    const result = await model.generateContent(systemPrompt);
     
     const response = await result.response;
     const text = response.text();
