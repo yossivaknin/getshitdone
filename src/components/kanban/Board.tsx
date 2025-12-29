@@ -184,20 +184,37 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             dueDate = new Date(task.dueDate);
         }
 
-        // Set to start of day for comparison
+        // Set to start of day for comparison (normalize to local midnight)
         const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        
+        // Calculate days difference (positive = future, 0 = today, negative = past)
+        const daysDiff = Math.floor((dueDateStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
 
-        // TODAY: due date is today
-        if (dueDateStart.getTime() === today.getTime()) {
+        console.log('[CATEGORIZE] Task categorization:', {
+            taskTitle: task.title,
+            dueDate: task.dueDate,
+            dueDateStart: dueDateStart.toISOString().split('T')[0],
+            todayStart: todayStart.toISOString().split('T')[0],
+            daysDiff: daysDiff,
+            endOfWeek: endOfWeek.toISOString().split('T')[0]
+        });
+
+        // TODAY: due date is exactly today (daysDiff === 0)
+        if (daysDiff === 0) {
+            console.log('[CATEGORIZE] → TODAY (due today)');
             return 'today';
         }
 
-        // THIS WEEK: due date is between tomorrow and end of week
-        if (dueDateStart > today && dueDateStart <= endOfWeek) {
+        // THIS WEEK: due date is tomorrow or later, but within this week (up to Sunday)
+        // Check if it's after today AND before/equal to end of week
+        if (daysDiff > 0 && dueDateStart <= endOfWeek) {
+            console.log('[CATEGORIZE] → THIS WEEK (due between tomorrow and end of week)');
             return 'this-week';
         }
 
         // QUEUE: due date is in the future (beyond this week) or in the past (overdue)
+        console.log('[CATEGORIZE] → QUEUE (due date beyond this week or overdue)');
         return 'queue';
     }, []);
 
