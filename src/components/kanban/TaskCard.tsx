@@ -456,9 +456,9 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 {...attributes}
                 {...listeners}
                 className={cn(
-                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-grab active:cursor-grabbing group relative w-full",
+                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-gray-800 hover:border-gray-700 transition-all duration-200 cursor-grab active:cursor-grabbing group relative w-full",
                     getStatusStripeColor(),
-                    isDone ? "bg-slate-50 opacity-50 grayscale" : "bg-white",
+                    isDone ? "bg-gray-900/30 opacity-50 grayscale" : "bg-gray-900",
                     isDragging && "scale-105 opacity-50"
                 )}
                 onClick={handleCardClick}
@@ -471,7 +471,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                     className="drag-handle absolute left-0 top-0 bottom-0 w-10 sm:w-12 md:w-14 flex items-center justify-center z-10 pointer-events-none"
                 >
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                        <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
                     </div>
                 </div>
                 
@@ -493,7 +493,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                                 disabled={isScheduling}
-                                className="schedule-button opacity-0 group-hover:opacity-100 p-1.5 hover:bg-blue-50 rounded-md text-blue-500 hover:text-blue-600 transition-all disabled:opacity-50 pointer-events-auto"
+                                className="schedule-button opacity-0 group-hover:opacity-100 p-1.5 hover:bg-gray-800 rounded-md text-emerald-500 hover:text-emerald-400 transition-all disabled:opacity-50 pointer-events-auto"
                                 title="Schedule in Google Calendar"
                             >
                                 <CalendarCheck className="w-4 h-4" />
@@ -506,15 +506,15 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
 
                 {/* Task Title */}
                 <h3 className={cn(
-                    "text-sm sm:text-[15px] font-semibold text-gray-800 mb-3 sm:mb-4 leading-snug pr-16 sm:pr-20",
-                    isDone && "line-through text-gray-400",
-                    isAtRisk && !isDone && "text-red-700"
+                    "text-sm sm:text-[15px] font-semibold text-white mb-3 sm:mb-4 leading-snug pr-16 sm:pr-20",
+                    isDone && "line-through text-gray-500",
+                    isAtRisk && !isDone && "text-red-400"
                 )}>
                 {task.title}
             </h3>
 
                 {/* Footer Info */}
-                <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-gray-50">
+                <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-gray-800">
                     <div className="flex items-center gap-2 sm:gap-4">
                         {task.dueDate && (() => {
                             // Format date for display
