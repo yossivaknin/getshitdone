@@ -299,7 +299,6 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
             status: newStatus,
             list_id: newListId,
             title: task.title,
-            description: task.description,
             dueDate: task.dueDate,
             duration: task.duration,
             tags: task.tags || []
@@ -322,7 +321,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 toListId: newListId
             });
             
-            const { updateTaskStatus } = await import('@/app/actions');
+            const { updateTaskStatus, deleteCalendarEvents } = await import('@/app/actions');
             const result = await updateTaskStatus(task.id, newStatus);
             
             if (result.error) {
@@ -333,7 +332,31 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 }
                 toast.error(result.error);
             } else {
-                console.log('[QuickAction] Status updated successfully, refreshing tasks in background...');
+                console.log('[QuickAction] Status updated successfully');
+                
+                // If moving to 'done' and task had calendar events, delete them
+                if (newStatus === 'done' && result.hadCalendarEvents && result.calendarEventIds && result.calendarEventIds.length > 0) {
+                    console.log('[QuickAction] Task moved to done - deleting calendar events:', result.calendarEventIds);
+                    
+                    const accessToken = localStorage.getItem('google_calendar_token');
+                    if (accessToken) {
+                        // Delete calendar events in background (don't block UI)
+                        deleteCalendarEvents(result.calendarEventIds, accessToken)
+                            .then((deleteResult) => {
+                                if (deleteResult.success) {
+                                    console.log('[QuickAction] ✅ Calendar events deleted:', deleteResult.deleted);
+                                    toast.success('Calendar events removed', { duration: 2000 });
+                                } else {
+                                    console.warn('[QuickAction] ⚠️ Some calendar events could not be deleted:', deleteResult.message);
+                                }
+                            })
+                            .catch((error) => {
+                                console.error('[QuickAction] Error deleting calendar events:', error);
+                            });
+                    } else {
+                        console.warn('[QuickAction] No access token - cannot delete calendar events');
+                    }
+                }
                 
                 // Refresh in background to sync with server (no user wait)
                 if (onRefreshTasks) {

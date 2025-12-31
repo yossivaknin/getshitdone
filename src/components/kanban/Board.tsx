@@ -596,19 +596,30 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
         // Handle calendar events asynchronously (don't block UI update)
         if (isMovingToDone && task.googleEventIds && task.googleEventIds.length > 0) {
-            // Delete calendar events
-            handleDeleteCalendarEvents(task.googleEventIds).then((deleted) => {
-                if (deleted) {
-                    toast.success('Calendar events removed');
-                    // Update task to clear event IDs using functional update
-                    updateTasks((currentTasks) => {
-                        const finalTask = { ...updatedTask, googleEventIds: [] };
-                        return currentTasks.map(t => t.id === taskId ? finalTask : t);
+            // Delete calendar events using server action
+            const accessToken = typeof window !== 'undefined' ? localStorage.getItem('google_calendar_token') : null;
+            if (accessToken) {
+                const { deleteCalendarEvents } = await import('@/app/actions');
+                deleteCalendarEvents(task.googleEventIds, accessToken)
+                    .then((result) => {
+                        if (result.success) {
+                            console.log('[DRAG] ✅ Calendar events deleted:', result.deleted);
+                            toast.success('Calendar events removed');
+                            // Update task to clear event IDs using functional update
+                            updateTasks((currentTasks) => {
+                                const finalTask = { ...updatedTask, googleEventIds: [] };
+                                return currentTasks.map(t => t.id === taskId ? finalTask : t);
+                            });
+                        } else {
+                            console.warn('[DRAG] ⚠️ Some calendar events could not be deleted:', result.message);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('[DRAG] Error deleting calendar events:', error);
                     });
-                }
-            }).catch((error) => {
-                console.error('[DRAG] Error deleting calendar events:', error);
-            });
+            } else {
+                console.warn('[DRAG] No access token - cannot delete calendar events');
+            }
         } else if (isMovingFromDone && task.duration) {
             // Re-schedule the task
             handleRescheduleTask(updatedTask).then((rescheduled) => {

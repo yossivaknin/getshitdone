@@ -126,6 +126,7 @@ export async function smartSchedule(
   
   // Find free slots for all chunks
   const allFreeSlots: TimeSlot[] = [];
+  let eventIds: string[] = []; // Initialize event IDs array
   let currentTime = now;
   
   // Note: Empty busySlots is OK - it just means the calendar is free
@@ -136,13 +137,16 @@ export async function smartSchedule(
   }
   
   // Track scheduled slots so they don't overlap - make a deep copy to avoid reference issues
-  const scheduledSlots: TimeSlot[] = busySlots.map(slot => ({
+  let scheduledSlots: TimeSlot[] = busySlots.map(slot => ({
     start: new Date(slot.start),
     end: new Date(slot.end)
   }));
   
   // Sort busy slots by start time for efficient conflict checking
   scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+  
+  // Import getBusySlots for re-fetching
+  const { getBusySlots: refetchBusySlots } = await import('./calendar');
   
   console.log(`[SMART-SCHEDULE] ========== SMART SCHEDULING ==========`);
   console.log(`[SMART-SCHEDULE] Task: ${task.title}`);
@@ -351,7 +355,96 @@ export async function smartSchedule(
       };
     }
     
-    allFreeSlots.push(selectedSlot);
+    // CRITICAL: Create the calendar event IMMEDIATELY after finding the slot
+    // This ensures we have the event in the calendar before finding the next chunk
+    const chunkNum = i + 1;
+    const totalChunks = chunks.length;
+    const summary = totalChunks > 1
+      ? `[Focus] ${task.title} (Part ${chunkNum}/${totalChunks})`
+      : `[Focus] ${task.title}`;
+    
+    console.log(`[SMART-SCHEDULE] Creating event ${chunkNum}/${totalChunks} immediately: ${summary}`);
+    
+    let eventId: string;
+    try {
+      eventId = await createCalendarEvent(
+        config,
+        summary,
+        selectedSlot.start,
+        selectedSlot.end
+      );
+      console.log(`[SMART-SCHEDULE] ✅ Event ${chunkNum} created successfully: ${eventId}`);
+    } catch (error: any) {
+      console.error(`[SMART-SCHEDULE] ❌ Failed to create event ${chunkNum}:`, error);
+      return {
+        success: false,
+        eventsCreated: i, // Number of events created so far
+        message: `Failed to create calendar event for chunk ${chunkNum}: ${error.message || String(error)}`
+      };
+    }
+    
+    // Add this event to scheduledSlots immediately
+    scheduledSlots.push({
+      start: new Date(selectedSlot.start),
+      end: new Date(selectedSlot.end)
+    });
+    
+    // Add 2-hour buffer period after this chunk
+    const bufferStart = new Date(selectedSlot.end);
+    const bufferEnd = new Date(selectedSlot.end.getTime() + 2 * 60 * 60 * 1000);
+    scheduledSlots.push({
+      start: bufferStart,
+      end: bufferEnd
+    });
+    
+    // Sort scheduled slots
+    scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+    
+    console.log(`[SMART-SCHEDULE] Added chunk ${chunkNum} event to busy list`);
+    console.log(`[SMART-SCHEDULE] Total busy slots now: ${scheduledSlots.length}`);
+    
+    // CRITICAL: Before finding the next chunk, re-fetch busy slots from calendar
+    // This ensures we catch any meetings that FreeBusy might have missed
+    if (i < chunks.length - 1) {
+      console.log(`[SMART-SCHEDULE] Re-fetching busy slots from calendar before finding chunk ${i + 2}...`);
+      try {
+        const updatedBusySlots = await refetchBusySlots(config, currentTime, dueDate);
+        console.log(`[SMART-SCHEDULE] Re-fetched ${updatedBusySlots.length} busy slots from calendar`);
+        
+        // Merge with our scheduled slots (avoid duplicates)
+        const existingKeys = new Set<string>();
+        scheduledSlots.forEach(slot => {
+          const key = `${slot.start.getTime()}-${slot.end.getTime()}`;
+          existingKeys.add(key);
+        });
+        
+        // Add any new busy slots that we don't already have
+        updatedBusySlots.forEach(slot => {
+          const key = `${slot.start.getTime()}-${slot.end.getTime()}`;
+          if (!existingKeys.has(key)) {
+            scheduledSlots.push({
+              start: new Date(slot.start),
+              end: new Date(slot.end)
+            });
+            existingKeys.add(key);
+            console.log(`[SMART-SCHEDULE] Added new busy slot from re-fetch: ${slot.start.toISOString()} - ${slot.end.toISOString()}`);
+          }
+        });
+        
+        // Sort again
+        scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+        console.log(`[SMART-SCHEDULE] Total busy slots after re-fetch: ${scheduledSlots.length}`);
+      } catch (error: any) {
+        console.warn(`[SMART-SCHEDULE] ⚠️ Failed to re-fetch busy slots: ${error.message}`);
+        console.warn(`[SMART-SCHEDULE] Continuing with existing busy slots (may miss some meetings)`);
+      }
+    }
+    
+    // Store event ID for return
+    if (!eventIds) {
+      eventIds = [];
+    }
+    eventIds.push(eventId);
     
     // Validate selected slot is within working hours
     // CRITICAL FIX: Use user's timezone from config, NOT server timezone (UTC)!
@@ -406,28 +499,6 @@ export async function smartSchedule(
     daysWithChunks.add(selectedDay);
     console.log(`[SMART-SCHEDULE] Marked day ${selectedDay} as having a chunk`);
     
-    // Add this slot to scheduledSlots so next chunk won't use it (deep copy)
-    scheduledSlots.push({
-      start: new Date(selectedSlot.start),
-      end: new Date(selectedSlot.end)
-    });
-    
-    // Add 2-hour buffer period after this chunk as a "busy" slot
-    // This ensures the next chunk can't be scheduled too close
-    const bufferStart = new Date(selectedSlot.end);
-    const bufferEnd = new Date(selectedSlot.end.getTime() + 2 * 60 * 60 * 1000); // 2 hours after chunk ends
-    scheduledSlots.push({
-      start: bufferStart,
-      end: bufferEnd
-    });
-    
-    // Sort scheduled slots for efficient conflict checking
-    scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
-    
-    console.log(`[SMART-SCHEDULE] Added chunk slot to busy list`);
-    console.log(`[SMART-SCHEDULE] Added 2-hour buffer period (${bufferStart.toISOString()} to ${bufferEnd.toISOString()}) to busy list`);
-    console.log(`[SMART-SCHEDULE] Total busy slots now: ${scheduledSlots.length}`);
-    
     // For next chunk, if we have multiple chunks and there's time, move to next day
     if (chunks.length > 1 && i < chunks.length - 1 && daysUntilDue >= chunks.length) {
       // Move to next day at working hours start to avoid scheduling on same day
@@ -457,55 +528,11 @@ export async function smartSchedule(
     }
   }
   
-  // Create calendar events
-  const eventIds: string[] = [];
-  const totalChunks = chunks.length;
-  // Track newly created events to add to busy slots for subsequent chunks
-  const newlyCreatedSlots: TimeSlot[] = [];
+  // All chunks have been created (events were created immediately after finding each slot)
+  // eventIds array was populated during the loop above
   
-  for (let i = 0; i < allFreeSlots.length; i++) {
-    const slot = allFreeSlots[i];
-    const chunkNum = i + 1;
-    
-    // Naming convention: [Focus] Task Name (Part X/Y)
-    const summary = totalChunks > 1
-      ? `[Focus] ${task.title} (Part ${chunkNum}/${totalChunks})`
-      : `[Focus] ${task.title}`;
-    
-    console.log(`[SMART-SCHEDULE] Creating event ${i + 1}/${allFreeSlots.length}: ${summary} at ${slot.start.toISOString()}`);
-    
-    try {
-      const eventId = await createCalendarEvent(
-        config,
-        summary,
-        slot.start,
-        slot.end
-      );
-      
-      eventIds.push(eventId);
-      
-      // Immediately add this event to newly created slots so subsequent chunks in this task don't overlap
-      newlyCreatedSlots.push({
-        start: new Date(slot.start),
-        end: new Date(slot.end)
-      });
-      
-      // Also add to scheduledSlots for any remaining chunks
-      scheduledSlots.push({
-        start: new Date(slot.start),
-        end: new Date(slot.end)
-      });
-      scheduledSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
-      
-      console.log(`[SMART-SCHEDULE] Event created successfully: ${eventId}`);
-      console.log(`[SMART-SCHEDULE] Added to busy slots. Total busy slots now: ${scheduledSlots.length}`);
-    } catch (error: any) {
-      console.error(`[SMART-SCHEDULE] Failed to create event ${i + 1}:`, error);
-      // Continue with other events even if one fails
-    }
-  }
-  
-  if (eventIds.length === 0) {
+  // Verify we have event IDs
+  if (!eventIds || eventIds.length === 0) {
     return {
       success: false,
       eventsCreated: 0,

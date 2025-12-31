@@ -259,44 +259,46 @@ export default function UnifiedViewPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#F4F5F7]">
-      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5 lg:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-transparent border-b border-gray-200">
-        <div className="flex-1 min-w-0 flex items-center gap-4">
+      {/* Sticky Header */}
+      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3.5 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-white/90 backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
+        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4">
           <Logo />
-          <p className="font-mono text-xs uppercase tracking-widest text-slate-500 mt-0.5 sm:mt-1">
+          <div className="hidden sm:block h-5 w-px bg-gray-300" />
+          <p className="hidden sm:block font-mono text-xs uppercase tracking-widest text-slate-500">
             <MotivatorSubtitle tasks={tasks} />
           </p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setIsMissionStatusVisible(!isMissionStatusVisible)}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-2 rounded-md transition-all ${
               isMissionStatusVisible 
-                ? 'bg-gray-100 text-gray-900' 
-                : 'hover:bg-white text-gray-600'
+                ? 'bg-slate-100 text-slate-900 shadow-sm' 
+                : 'hover:bg-slate-50 text-slate-600'
             }`}
             title={isMissionStatusVisible ? "Hide Mission Status" : "Show Mission Status"}
           >
-            <Target className={`w-5 h-5 ${isMissionStatusVisible ? 'text-gray-900' : 'text-gray-600'}`} />
+            <Target className={`w-4 h-4 sm:w-5 sm:h-5 ${isMissionStatusVisible ? 'text-slate-900' : 'text-slate-600'}`} />
           </button>
           <Link href="/settings">
-            <button className="p-2 hover:bg-white rounded-lg transition-colors">
-              <Settings className="w-5 h-5 text-gray-600" />
+            <button className="p-2 hover:bg-slate-50 rounded-md transition-all text-slate-600">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </Link>
           <form action={logout}>
             <button
               type="submit"
-              className="p-2 hover:bg-white rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-50 rounded-md transition-all text-slate-600"
               title="Logout"
             >
-              <LogOut className="w-5 h-5 text-gray-600" />
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </form>
         </div>
       </header>
       
-      {/* Morning Briefing Widget */}
-      <div className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 border-b border-gray-200">
+      {/* Morning Briefing Widget - Compact and Integrated */}
+      <div className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 bg-gradient-to-b from-slate-50/50 to-transparent border-b border-gray-200/40">
         <MorningBriefing />
       </div>
       

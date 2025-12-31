@@ -384,10 +384,10 @@ export async function updateTask(taskId: string, updates: {
     return { error: 'Not authenticated' }
   }
 
-  // Verify task belongs to user
+  // Get current task to check for calendar events
   const { data: existingTask } = await supabase
     .from('tasks')
-    .select('id')
+    .select('id, google_event_ids, status')
     .eq('id', taskId)
     .eq('user_id', user.id)
     .single()
@@ -400,7 +400,15 @@ export async function updateTask(taskId: string, updates: {
   const updateData: any = {}
   if (updates.title !== undefined) updateData.title = updates.title
   if (updates.description !== undefined) updateData.description = updates.description
-  if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.status !== undefined) {
+    updateData.status = updates.status
+    // If moving to 'done', clear calendar event IDs
+    // The actual calendar events will be deleted client-side (since we need access token)
+    if (updates.status === 'done' && existingTask.google_event_ids && Array.isArray(existingTask.google_event_ids) && existingTask.google_event_ids.length > 0) {
+      updateData.google_event_ids = []
+      console.log('[updateTask] Moving to done - clearing calendar event IDs:', existingTask.google_event_ids)
+    }
+  }
   if (updates.dueDate !== undefined) {
     // Handle empty string as null (clearing the date)
     if (updates.dueDate === '' || updates.dueDate === null) {
@@ -529,9 +537,24 @@ export async function updateTaskStatus(taskId: string, newStatus: string, newPos
     userId: user.id
   });
 
+  // Get the task first to check for calendar events
+  const { data: currentTask } = await supabase
+    .from('tasks')
+    .select('google_event_ids, status')
+    .eq('id', taskId)
+    .eq('user_id', user.id)
+    .single()
+
   const updateData: any = { status: newStatus }
   if (newPosition !== undefined) {
     updateData.position = newPosition
+  }
+
+  // If moving to 'done', clear calendar event IDs
+  // The actual calendar events will be deleted client-side (since we need access token)
+  if (newStatus === 'done' && currentTask?.google_event_ids && Array.isArray(currentTask.google_event_ids) && currentTask.google_event_ids.length > 0) {
+    updateData.google_event_ids = []
+    console.log('[updateTaskStatus] Moving to done - clearing calendar event IDs:', currentTask.google_event_ids)
   }
 
   const { data: updatedTask, error } = await supabase
@@ -550,11 +573,70 @@ export async function updateTaskStatus(taskId: string, newStatus: string, newPos
   console.log('[updateTaskStatus] Task updated successfully:', {
     taskId: updatedTask?.id,
     newStatus: updatedTask?.status,
-    oldStatus: 'unknown'
-  });
+    oldStatus: currentTask?.status,
+    hadCalendarEvents: currentTask?.google_event_ids?.length > 0
+  })
 
   revalidatePath('/app')
-  return { error: null, task: updatedTask }
+  return { 
+    error: null, 
+    task: updatedTask,
+    hadCalendarEvents: currentTask?.google_event_ids?.length > 0,
+    calendarEventIds: currentTask?.google_event_ids || []
+  }
+}
+
+/**
+ * Delete calendar events from Google Calendar
+ * This is a server action that can be called from the client
+ */
+export async function deleteCalendarEvents(eventIds: string[], accessToken: string) {
+  if (!eventIds || eventIds.length === 0) {
+    return { success: true, deleted: 0, message: 'No events to delete' }
+  }
+
+  if (!accessToken) {
+    return { success: false, deleted: 0, message: 'No access token provided' }
+  }
+
+  console.log('[deleteCalendarEvents] Deleting', eventIds.length, 'calendar events')
+
+  let successCount = 0
+  const errors: string[] = []
+
+  for (const eventId of eventIds) {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        console.log('[deleteCalendarEvents] ✅ Deleted event:', eventId)
+        successCount++
+      } else {
+        const errorText = await response.text()
+        console.error('[deleteCalendarEvents] Failed to delete event:', eventId, errorText)
+        errors.push(`Event ${eventId}: ${errorText.substring(0, 100)}`)
+      }
+    } catch (error: any) {
+      console.error('[deleteCalendarEvents] Error deleting event:', eventId, error)
+      errors.push(`Event ${eventId}: ${error.message || String(error)}`)
+    }
+  }
+
+  if (successCount === eventIds.length) {
+    return { success: true, deleted: successCount, message: `Successfully deleted ${successCount} calendar event(s)` }
+  } else if (successCount > 0) {
+    return { success: true, deleted: successCount, message: `Deleted ${successCount} of ${eventIds.length} events`, errors }
+  } else {
+    return { success: false, deleted: 0, message: `Failed to delete calendar events`, errors }
+  }
 }
 
 export async function scheduleTask(
