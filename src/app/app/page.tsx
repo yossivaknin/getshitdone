@@ -2,10 +2,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Board } from "@/components/kanban/Board";
-import { MissionStatus } from "@/components/mission-status";
-import { MotivatorSubtitle } from "@/components/motivator-subtitle";
+import { Insights } from "@/components/dashboard/Insights";
 import Link from 'next/link';
-import { Settings, Target, LogOut, Plus } from 'lucide-react';
+import { Settings, LogOut, Plus, Zap, Clock, User } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
 import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
@@ -14,10 +13,9 @@ import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 
 // Kanban columns - tasks are automatically categorized by due date in the Board component
 const kanbanColumns = [
-  { id: 'queue', title: 'QUEUE' },
-  { id: 'today', title: 'TODAY' },
-  { id: 'this-week', title: 'THIS WEEK' },
-  { id: 'done', title: 'DONE' }
+  { id: 'queue', title: 'Queue' },
+  { id: 'today', title: 'Focus' },
+  { id: 'this-week', title: 'This Week' }
 ];
 
 export default function UnifiedViewPage() {
@@ -25,31 +23,12 @@ export default function UnifiedViewPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<'all' | 'work' | 'personal'>('all');
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Automatically refresh Google Calendar token in the background
   useTokenRefresh();
-
-  // Set initial sidebar visibility based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      // Show sidebar on tablet and desktop (>= 768px), hide on mobile
-      if (typeof window !== 'undefined') {
-        setIsMissionStatusVisible(window.innerWidth >= 768);
-      }
-    };
-    
-    // Check on mount
-    checkScreenSize();
-    
-    // Listen for resize events
-    if (typeof window !== 'undefined') {
-      window.addEventListener('resize', checkScreenSize);
-      return () => window.removeEventListener('resize', checkScreenSize);
-    }
-  }, []);
 
   // Check for Google token from Supabase OAuth on mount
   useEffect(() => {
@@ -254,48 +233,94 @@ export default function UnifiedViewPage() {
     };
   }, []);
 
+  // Filter tasks based on selected tab
+  const filteredTasks = useMemo(() => {
+    if (selectedTab === 'all') return tasks;
+    return tasks.filter((task: any) => {
+      const tags = task.tags || [];
+      const tagNames = tags.map((t: any) => (typeof t === 'string' ? t : t.name)).map((n: string) => n.toLowerCase());
+      if (selectedTab === 'work') {
+        return tagNames.includes('work');
+      }
+      if (selectedTab === 'personal') {
+        return tagNames.includes('personal');
+      }
+      return true;
+    });
+  }, [tasks, selectedTab]);
+
   return (
-    <div className="h-screen flex flex-col bg-[#F4F5F7]">
-      {/* Top Action Bar */}
-      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3.5 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-white/90 backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
-        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4">
-          <div className="hidden sm:block font-mono text-xs uppercase tracking-widest text-slate-500">
-            <MotivatorSubtitle tasks={tasks} />
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={() => setIsMissionStatusVisible(!isMissionStatusVisible)}
-            className={`p-2 rounded-md transition-all ${
-              isMissionStatusVisible 
-                ? 'bg-slate-100 text-slate-900 shadow-sm' 
-                : 'hover:bg-slate-50 text-slate-600'
-            }`}
-            title={isMissionStatusVisible ? "Hide Mission Status" : "Show Mission Status"}
+    <div className="h-screen flex flex-col bg-[#0F0F0F]">
+      {/* Top Header Bar */}
+      <header className="px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800">
+        <div className="text-gray-400 text-sm font-mono">SITREP</div>
+        <div className="flex items-center gap-4">
+          <button className="text-gray-400 hover:text-white transition-colors">
+            <Zap className="w-5 h-5" />
+          </button>
+          <button className="text-gray-400 hover:text-white transition-colors">
+            <Clock className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setCreateDialogOpen(true)}
+            className="text-gray-400 hover:text-white transition-colors"
           >
-            <Target className={`w-4 h-4 sm:w-5 sm:h-5 ${isMissionStatusVisible ? 'text-slate-900' : 'text-slate-600'}`} />
+            <Plus className="w-5 h-5" />
           </button>
           <Link href="/settings">
-            <button className="p-2 hover:bg-slate-50 rounded-md transition-all text-slate-600">
-              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+            <button className="text-gray-400 hover:text-white transition-colors">
+              <User className="w-5 h-5" />
             </button>
           </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="p-2 hover:bg-slate-50 rounded-md transition-all text-slate-600"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </form>
         </div>
       </header>
+
+      {/* Navigation Tabs */}
+      <div className="px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setSelectedTab('all')}
+            className={`text-sm font-medium transition-colors ${
+              selectedTab === 'all'
+                ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            All tasks
+          </button>
+          <button
+            onClick={() => setSelectedTab('work')}
+            className={`text-sm font-medium transition-colors ${
+              selectedTab === 'work'
+                ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Work
+          </button>
+          <button
+            onClick={() => setSelectedTab('personal')}
+            className={`text-sm font-medium transition-colors ${
+              selectedTab === 'personal'
+                ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Personal
+          </button>
+        </div>
+        <button
+          onClick={() => setCreateDialogOpen(true)}
+          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          + New Task
+        </button>
+      </div>
       
       {/* Main Content with Sidebar */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         {/* Main Content - Unified Kanban Board */}
-        <main className="flex-1 overflow-hidden min-w-0 flex flex-col">
+        <main className="flex-1 overflow-hidden min-w-0 flex flex-col bg-[#0F0F0F]">
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-gray-500 font-mono">Loading tasks...</p>
@@ -303,7 +328,7 @@ export default function UnifiedViewPage() {
           ) : (
             <Board 
               lists={kanbanColumns} 
-              tasks={tasks}
+              tasks={filteredTasks}
               workspaceId="user-workspace"
               selectedTag={selectedTag}
               onTasksChange={refreshTasks as any}
@@ -317,41 +342,11 @@ export default function UnifiedViewPage() {
           )}
         </main>
 
-        {/* Right Sidebar - Mission Status with AI Briefing */}
-        {isMissionStatusVisible && (
-          <div className="hidden md:block w-80 lg:w-96 flex-shrink-0 transition-all duration-300 ease-in-out border-l border-slate-300">
-            <MissionStatus tasks={tasks} />
-          </div>
-        )}
-        
-        {/* Mobile Mission Status Drawer */}
-        {isMissionStatusVisible && (
-          <div className="md:hidden fixed inset-y-0 right-0 w-96 max-w-[90vw] bg-white border-l border-slate-300 z-40 shadow-xl transform transition-transform duration-300 ease-in-out">
-            <MissionStatus tasks={tasks} />
-          </div>
-        )}
-        
-        {/* Mobile overlay when sidebar is open */}
-        {isMissionStatusVisible && (
-          <div 
-            className="md:hidden fixed inset-0 bg-black/50 z-30"
-            onClick={() => setIsMissionStatusVisible(false)}
-          />
-        )}
+        {/* Right Sidebar - Insights */}
+        <div className="hidden lg:block w-80 flex-shrink-0 border-l border-gray-800">
+          <Insights tasks={tasks} />
+        </div>
       </div>
-
-      {/* Floating Create Task Button */}
-      <button
-        onClick={() => {
-          // Open create dialog - Board defaults to 'todo' column
-          setCreateDialogOpen(true);
-        }}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 h-14 w-14 md:h-16 md:w-16 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center active:scale-95"
-        title="Create New Task"
-        aria-label="Create New Task"
-      >
-        <Plus className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.5} />
-      </button>
     </div>
   );
 }

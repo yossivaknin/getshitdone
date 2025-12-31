@@ -812,8 +812,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
             onDragEnd={handleDragEnd}
         >
             <div className="flex flex-col h-full min-h-0">
-                {/* Global Tags Section - Always render container to prevent layout shift */}
-                <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 sm:pt-4 md:pt-5 lg:pt-6 pb-2 sm:pb-2.5 md:pb-3 flex-shrink-0 min-h-[44px]">
+                {/* Global Tags Section - Hidden for cleaner design */}
+                <div className="hidden px-3 sm:px-4 md:px-5 lg:px-6 pt-3 sm:pt-4 md:pt-5 lg:pt-6 pb-2 sm:pb-2.5 md:pb-3 flex-shrink-0 min-h-[44px]">
                     {isMounted && (
                         <div className="flex flex-wrap gap-1.5 sm:gap-2">
                             {/* All Tasks button - Always show */}
@@ -821,15 +821,15 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                                 onClick={() => onSelectTag?.(undefined)}
                                 className={`text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all ${
                                     !selectedTag
-                                        ? 'bg-black text-white border-black'
-                                        : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50'
+                                        ? 'bg-emerald-500 text-white border-emerald-500'
+                                        : 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700'
                                 }`}
                             >
                                 All Tasks
                             </button>
                             {/* Show loading skeleton or tags */}
                             {isLoadingTags ? (
-                                <div className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border bg-gray-100 text-gray-400 border-gray-300 animate-pulse">
+                                <div className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border bg-gray-800 text-gray-500 border-gray-700 animate-pulse">
                                     Loading...
                                 </div>
                             ) : (
@@ -841,8 +841,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                                             onClick={() => onSelectTag?.(isSelected ? undefined : tag.name)}
                                             className={`text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-[4px] border transition-all ${
                                                 isSelected
-                                                    ? 'bg-black text-white border-black'
-                                                    : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50'
+                                                    ? 'bg-emerald-500 text-white border-emerald-500'
+                                                    : 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700'
                                             }`}
                                         >
                                             {tag.name}
@@ -855,8 +855,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 </div>
 
                 {/* Mobile Tab Bar - Only show on mobile (below md) */}
-                <div className="md:hidden px-3 sm:px-4 pt-2 pb-3 flex-shrink-0 border-b border-slate-200">
-                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                <div className="md:hidden px-3 sm:px-4 pt-2 pb-3 flex-shrink-0 border-b border-gray-800">
+                    <div className="flex gap-1 bg-gray-900 p-1 rounded-lg">
                         {initialLists.map((list) => {
                             const isActive = mobileSelectedTab === list.id;
                             // Use the list title directly (already uppercase)
@@ -868,8 +868,8 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                                     onClick={() => setMobileSelectedTab(list.id)}
                                     className={`flex-1 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all ${
                                         isActive
-                                            ? 'bg-slate-900 text-white'
-                                            : 'bg-slate-100 text-slate-500'
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-gray-800 text-gray-400'
                                     }`}
                                 >
                                     {displayName}
