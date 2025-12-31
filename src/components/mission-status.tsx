@@ -177,56 +177,56 @@ export function MissionStatus({ tasks }: MissionStatusProps) {
         </h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 md:p-4 space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
         {/* AI Briefing Section */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 rounded-md p-4 border border-emerald-500/20">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-emerald-500/10">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-emerald-400 uppercase tracking-widest text-[10px] font-semibold">
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 rounded-lg p-5 sm:p-6 border border-emerald-500/20">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-emerald-500/10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-emerald-400 uppercase tracking-widest text-xs font-semibold">
                 Daily Strategy
               </span>
               {!isLoadingBriefing && !error && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  <span className="text-emerald-400 text-[9px] uppercase font-medium">Live</span>
+                  <span className="text-emerald-400 text-[10px] uppercase font-medium">Live</span>
                 </div>
               )}
             </div>
             {briefing && !isLoadingBriefing && !error && (
               <div className="text-right">
-                <div className="text-emerald-400/40 text-[9px] uppercase tracking-widest mb-0.5">Readiness</div>
-                <div className="text-emerald-400 text-xl font-bold">{briefing.readinessScore}%</div>
+                <div className="text-emerald-400/40 text-[10px] uppercase tracking-widest mb-1">Readiness</div>
+                <div className="text-emerald-400 text-2xl sm:text-3xl font-bold">{briefing.readinessScore}%</div>
               </div>
             )}
           </div>
 
           {isLoadingBriefing && (
-            <div className="text-emerald-400/80 text-xs py-2">Loading briefing...</div>
+            <div className="text-emerald-400/80 text-sm py-4">Loading briefing...</div>
           )}
 
           {error && (
-            <div className="text-red-400/80 text-xs py-2">{error}</div>
+            <div className="text-red-400/80 text-sm py-4">{error}</div>
           )}
 
           {briefing && !isLoadingBriefing && !error && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {/* Headline */}
-              <div className="bg-slate-800/40 border-l-2 border-emerald-500/50 pl-3 py-2 rounded-sm">
-                <div className="text-white text-sm font-semibold leading-snug">
+              <div className="bg-slate-800/40 border-l-4 border-emerald-500/50 pl-4 py-3 rounded-sm">
+                <div className="text-white text-base sm:text-lg font-semibold leading-relaxed">
                   {briefing.headline}
                 </div>
               </div>
 
               {/* Tactical Points */}
               <div>
-                <div className="text-emerald-400/50 text-[9px] uppercase tracking-widest mb-2">
+                <div className="text-emerald-400/50 text-[10px] sm:text-xs uppercase tracking-widest mb-3">
                   Key Insights
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-2.5 sm:space-y-3">
                   {briefing.tacticalPoints.map((point, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-emerald-300/80 text-xs leading-relaxed">
-                      <span className="text-emerald-500/40 mt-0.5 flex-shrink-0">•</span>
+                    <li key={idx} className="flex items-start gap-3 text-emerald-300/90 text-sm sm:text-base leading-relaxed">
+                      <span className="text-emerald-500/50 mt-1 flex-shrink-0 text-lg">•</span>
                       <span className="flex-1">{point}</span>
                     </li>
                   ))}

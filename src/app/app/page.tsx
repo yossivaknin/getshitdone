@@ -319,14 +319,14 @@ export default function UnifiedViewPage() {
 
         {/* Right Sidebar - Mission Status with AI Briefing */}
         {isMissionStatusVisible && (
-          <div className="hidden md:block w-56 lg:w-64 flex-shrink-0 transition-all duration-300 ease-in-out border-l border-slate-300">
+          <div className="hidden md:block w-80 lg:w-96 flex-shrink-0 transition-all duration-300 ease-in-out border-l border-slate-300">
             <MissionStatus tasks={tasks} />
           </div>
         )}
         
         {/* Mobile Mission Status Drawer */}
         {isMissionStatusVisible && (
-          <div className="md:hidden fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-white border-l border-slate-300 z-40 shadow-xl transform transition-transform duration-300 ease-in-out">
+          <div className="md:hidden fixed inset-y-0 right-0 w-96 max-w-[90vw] bg-white border-l border-slate-300 z-40 shadow-xl transform transition-transform duration-300 ease-in-out">
             <MissionStatus tasks={tasks} />
           </div>
         )}
