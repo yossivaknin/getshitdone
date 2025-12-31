@@ -1,14 +1,63 @@
 'use client'
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Target, Calendar, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface BriefingData {
+  readinessScore: number;
+  headline: string;
+  tacticalPoints: string[];
+}
 
 interface MissionStatusProps {
   tasks: any[];
 }
 
 export function MissionStatus({ tasks }: MissionStatusProps) {
+  const [briefing, setBriefing] = useState<BriefingData | null>(null);
+  const [isLoadingBriefing, setIsLoadingBriefing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch AI briefing
+  useEffect(() => {
+    const fetchBriefing = async () => {
+      try {
+        setIsLoadingBriefing(true);
+        setError(null);
+        
+        const accessToken = typeof window !== 'undefined' 
+          ? localStorage.getItem('google_calendar_token')
+          : null;
+        
+        const response = accessToken
+          ? await fetch('/api/briefing', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ accessToken }),
+            })
+          : await fetch('/api/briefing');
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch briefing: ${response.status} ${errorText}`);
+        }
+        
+        const data = await response.json();
+        setBriefing(data);
+      } catch (err: any) {
+        console.error('[MissionStatus] Error fetching briefing:', err);
+        setError(err.message || 'Failed to load briefing');
+      } finally {
+        setIsLoadingBriefing(false);
+      }
+    };
+
+    fetchBriefing();
+  }, []);
+
   // Memoize date calculations to avoid recalculating on every render
   const { today, endOfWeek } = useMemo(() => {
     const todayDate = new Date();
@@ -129,6 +178,64 @@ export function MissionStatus({ tasks }: MissionStatusProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 md:p-4 space-y-3 sm:space-y-4 md:space-y-6">
+        {/* AI Briefing Section */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 rounded-md p-4 border border-emerald-500/20">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-emerald-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-emerald-400 uppercase tracking-widest text-[10px] font-semibold">
+                Daily Strategy
+              </span>
+              {!isLoadingBriefing && !error && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                  <span className="text-emerald-400 text-[9px] uppercase font-medium">Live</span>
+                </div>
+              )}
+            </div>
+            {briefing && !isLoadingBriefing && !error && (
+              <div className="text-right">
+                <div className="text-emerald-400/40 text-[9px] uppercase tracking-widest mb-0.5">Readiness</div>
+                <div className="text-emerald-400 text-xl font-bold">{briefing.readinessScore}%</div>
+              </div>
+            )}
+          </div>
+
+          {isLoadingBriefing && (
+            <div className="text-emerald-400/80 text-xs py-2">Loading briefing...</div>
+          )}
+
+          {error && (
+            <div className="text-red-400/80 text-xs py-2">{error}</div>
+          )}
+
+          {briefing && !isLoadingBriefing && !error && (
+            <div className="space-y-3">
+              {/* Headline */}
+              <div className="bg-slate-800/40 border-l-2 border-emerald-500/50 pl-3 py-2 rounded-sm">
+                <div className="text-white text-sm font-semibold leading-snug">
+                  {briefing.headline}
+                </div>
+              </div>
+
+              {/* Tactical Points */}
+              <div>
+                <div className="text-emerald-400/50 text-[9px] uppercase tracking-widest mb-2">
+                  Key Insights
+                </div>
+                <ul className="space-y-1.5">
+                  {briefing.tacticalPoints.map((point, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-emerald-300/80 text-xs leading-relaxed">
+                      <span className="text-emerald-500/40 mt-0.5 flex-shrink-0">•</span>
+                      <span className="flex-1">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Status Message */}
         <div className="bg-slate-900 rounded-md p-3 border border-slate-700">
           <p className="text-sm font-medium text-green-400 leading-relaxed font-mono">
