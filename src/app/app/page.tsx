@@ -2,17 +2,15 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Board } from "@/components/kanban/Board";
-import { MissionStatus } from "@/components/mission-status";
 import { MotivatorSubtitle } from "@/components/motivator-subtitle";
-import { MorningBriefing } from "@/components/dashboard/MorningBriefing";
+import { CockpitHeader } from "@/components/dashboard/CockpitHeader";
 import Link from 'next/link';
-import { Settings, ChevronRight, ChevronLeft, Target, LogOut, Plus } from 'lucide-react';
+import { Settings, LogOut, Plus } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
 import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useTokenRefresh } from '@/hooks/useTokenRefresh';
-import { Logo } from '@/components/logo';
 
 // Kanban columns - tasks are automatically categorized by due date in the Board component
 const kanbanColumns = [
@@ -27,32 +25,11 @@ export default function UnifiedViewPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  // Hide sidebar by default to prevent flickering, will be shown on desktop after mount
-  const [isMissionStatusVisible, setIsMissionStatusVisible] = useState(false);
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Automatically refresh Google Calendar token in the background
   useTokenRefresh();
-
-  // Set initial sidebar visibility based on screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      // Show sidebar on tablet and desktop (>= 768px), hide on mobile
-      if (typeof window !== 'undefined') {
-        setIsMissionStatusVisible(window.innerWidth >= 768);
-      }
-    };
-    
-    // Check on mount
-    checkScreenSize();
-    
-    // Listen for resize events
-    if (typeof window !== 'undefined') {
-      window.addEventListener('resize', checkScreenSize);
-      return () => window.removeEventListener('resize', checkScreenSize);
-    }
-  }, []);
 
   // Check for Google token from Supabase OAuth on mount
   useEffect(() => {
@@ -259,27 +236,14 @@ export default function UnifiedViewPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#F4F5F7]">
-      {/* Sticky Header */}
-      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3.5 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-white/90 backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
+      {/* Top Action Bar */}
+      <header className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 flex items-center justify-between gap-3 sm:gap-4 bg-white/90 backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
         <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4">
-          <Logo />
-          <div className="hidden sm:block h-5 w-px bg-gray-300" />
-          <p className="hidden sm:block font-mono text-xs uppercase tracking-widest text-slate-500">
+          <div className="hidden sm:block font-mono text-xs uppercase tracking-widest text-slate-500">
             <MotivatorSubtitle tasks={tasks} />
-          </p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={() => setIsMissionStatusVisible(!isMissionStatusVisible)}
-            className={`p-2 rounded-md transition-all ${
-              isMissionStatusVisible 
-                ? 'bg-slate-100 text-slate-900 shadow-sm' 
-                : 'hover:bg-slate-50 text-slate-600'
-            }`}
-            title={isMissionStatusVisible ? "Hide Mission Status" : "Show Mission Status"}
-          >
-            <Target className={`w-4 h-4 sm:w-5 sm:h-5 ${isMissionStatusVisible ? 'text-slate-900' : 'text-slate-600'}`} />
-          </button>
           <Link href="/settings">
             <button className="p-2 hover:bg-slate-50 rounded-md transition-all text-slate-600">
               <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -297,56 +261,32 @@ export default function UnifiedViewPage() {
         </div>
       </header>
       
-      {/* Morning Briefing Widget - Compact and Integrated */}
-      <div className="px-4 sm:px-5 md:px-6 lg:px-8 py-3 bg-gradient-to-b from-slate-50/50 to-transparent border-b border-gray-200/40">
-        <MorningBriefing />
-      </div>
+      {/* The Cockpit - Unified HUD */}
+      <CockpitHeader tasks={tasks} />
       
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Main Content - Unified Kanban Board */}
-        <main className="flex-1 overflow-hidden min-w-0 flex flex-col">
+      {/* Main Content - Full Width Kanban Board */}
+      <div className="flex-1 overflow-hidden relative">
+        <main className="flex-1 overflow-hidden min-w-0 flex flex-col h-full">
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-gray-500 font-mono">Loading tasks...</p>
             </div>
           ) : (
-                <Board 
-                  lists={kanbanColumns} 
-                  tasks={tasks}
-                  workspaceId="user-workspace"
-                  selectedTag={selectedTag}
-                  onTasksChange={refreshTasks as any}
-                  allTags={allTags}
-                  allTagsWithColors={allTagsWithColors}
-                  onSelectTag={setSelectedTag}
-                  createDialogOpen={createDialogOpen}
-                  onCreateDialogOpenChange={setCreateDialogOpen}
-                  onRefreshTasks={refreshTasks}
-                />
+            <Board 
+              lists={kanbanColumns} 
+              tasks={tasks}
+              workspaceId="user-workspace"
+              selectedTag={selectedTag}
+              onTasksChange={refreshTasks as any}
+              allTags={allTags}
+              allTagsWithColors={allTagsWithColors}
+              onSelectTag={setSelectedTag}
+              createDialogOpen={createDialogOpen}
+              onCreateDialogOpenChange={setCreateDialogOpen}
+              onRefreshTasks={refreshTasks}
+            />
           )}
-      </main>
-
-        {/* Right Sidebar - Mission Status */}
-        {isMissionStatusVisible && (
-          <div className="hidden md:block w-56 lg:w-64 flex-shrink-0 transition-all duration-300 ease-in-out border-l border-slate-300">
-            <MissionStatus tasks={tasks} />
-          </div>
-        )}
-        
-        {/* Mobile Mission Status Drawer */}
-        {isMissionStatusVisible && (
-          <div className="md:hidden fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-white border-l border-slate-300 z-40 shadow-xl transform transition-transform duration-300 ease-in-out">
-            <MissionStatus tasks={tasks} />
-          </div>
-        )}
-        
-        {/* Mobile overlay when sidebar is open */}
-        {isMissionStatusVisible && (
-          <div 
-            className="md:hidden fixed inset-0 bg-black/50 z-30"
-            onClick={() => setIsMissionStatusVisible(false)}
-          />
-        )}
+        </main>
       </div>
 
       {/* Floating Create Task Button */}
