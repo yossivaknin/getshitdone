@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from 'react-hot-toast';
 import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { PWARegister } from '@/components/pwa-register';
+import { CapacitorInit } from '@/components/capacitor-init';
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -61,6 +62,7 @@ export default function RootLayout({
           {children}
           <Toaster position="top-right" />
           <PWARegister />
+          <CapacitorInit />
         </body>
       </html>
     );

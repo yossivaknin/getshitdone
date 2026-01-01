@@ -13,6 +13,10 @@ const nextConfig = {
     'react-hot-toast',
     '@radix-ui/react-dialog',
   ],
+  // For Capacitor: enable static export when building for mobile/desktop
+  // Note: This disables server-side features. For full functionality, 
+  // consider using a deployed version with Capacitor's server.url config
+  // output: process.env.CAPACITOR_BUILD === 'true' ? 'export' : undefined,
   // PWA configuration
   async headers() {
     return [
