@@ -258,6 +258,86 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
         }
     };
 
+    // Checkbox toggle handler - moves task to done or back
+    const handleCheckboxToggle = async () => {
+        const newStatus = isDone ? 'in_progress' : 'done';
+        const newListId = isDone ? 'in-progress' : 'done';
+
+        // Optimistic update: Update UI immediately for instant feedback
+        const updatedTask = {
+            ...task,
+            status: newStatus,
+            list_id: newListId,
+            title: task.title,
+            dueDate: task.dueDate,
+            duration: task.duration,
+            tags: task.tags || [],
+            googleEventIds: newListId === 'done' ? [] : task.googleEventIds // Clear event IDs if moving to done
+        };
+        
+        // Update UI immediately (optimistic)
+        if (onMoveTask) {
+            onMoveTask(updatedTask);
+        }
+        
+        // Show success immediately
+        toast.success(isDone ? 'Task reopened' : 'Task completed', { duration: 2000 });
+        
+        // Update database in background
+        try {
+            const { updateTaskStatus, deleteCalendarEvents } = await import('@/app/actions');
+            const result = await updateTaskStatus(task.id, newStatus);
+            
+            if (result.error) {
+                console.error('[Checkbox] Error updating status:', result.error);
+                // Rollback optimistic update by refreshing from server
+                if (onRefreshTasks) {
+                    await onRefreshTasks();
+                }
+                toast.error(result.error);
+            } else {
+                console.log('[Checkbox] Status updated successfully');
+                
+                // If moving to 'done' and task had calendar events, delete them
+                if (newStatus === 'done' && result.hadCalendarEvents && result.calendarEventIds && result.calendarEventIds.length > 0) {
+                    console.log('[Checkbox] Task moved to done - deleting calendar events:', result.calendarEventIds);
+                    
+                    const accessToken = localStorage.getItem('google_calendar_token');
+                    if (accessToken) {
+                        // Delete calendar events in background (don't block UI)
+                        deleteCalendarEvents(result.calendarEventIds, accessToken)
+                            .then((deleteResult) => {
+                                if (deleteResult.success) {
+                                    console.log('[Checkbox] ✅ Calendar events deleted');
+                                    toast.success('Calendar events removed', { duration: 2000 });
+                                } else {
+                                    console.warn('[Checkbox] ⚠️ Some calendar events could not be deleted:', deleteResult.message);
+                                }
+                            })
+                            .catch((error) => {
+                                console.error('[Checkbox] Error deleting calendar events:', error);
+                            });
+                    } else {
+                        console.warn('[Checkbox] No access token - cannot delete calendar events');
+                    }
+                }
+                
+                // Refresh in background to sync with server
+                if (onRefreshTasks) {
+                    onRefreshTasks().catch(err => {
+                        console.error('[Checkbox] Background refresh error:', err);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('[Checkbox] Exception:', error);
+            if (onRefreshTasks) {
+                await onRefreshTasks();
+            }
+            toast.error('Failed to update task');
+        }
+    };
+
     // Quick action handler for mobile
     const handleQuickAction = async (e: React.MouseEvent | React.TouchEvent) => {
         e.stopPropagation(); // Prevent opening edit dialog
@@ -456,7 +536,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 {...attributes}
                 {...listeners}
                 className={cn(
-                    "p-3 sm:p-3.5 md:p-4 pl-10 sm:pl-12 md:pl-14 rounded-md shadow-none border-t border-r border-b border-gray-800 hover:border-gray-700 transition-all duration-200 cursor-grab active:cursor-grabbing group relative w-full",
+                    "p-3 sm:p-3.5 md:p-4 pl-12 sm:pl-14 md:pl-16 rounded-md shadow-none border-t border-r border-b border-gray-800 hover:border-gray-700 transition-all duration-200 cursor-grab active:cursor-grabbing group relative w-full",
                     getStatusStripeColor(),
                     isDone ? "bg-gray-900/30 opacity-50 grayscale" : "bg-gray-900",
                     isDragging && "scale-105 opacity-50"
@@ -466,9 +546,33 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleCardClick}
             >
+                {/* Checkbox - Round checkbox to mark task as done */}
+                <div 
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-20 pointer-events-auto"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleCheckboxToggle();
+                    }}
+                >
+                    <button
+                        type="button"
+                        className={cn(
+                            "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                            isDone 
+                                ? "bg-emerald-500 border-emerald-500 hover:bg-emerald-600" 
+                                : "border-gray-600 hover:border-emerald-500 bg-transparent"
+                        )}
+                        title={isDone ? "Mark as incomplete" : "Mark as done"}
+                    >
+                        {isDone && (
+                            <CheckCircle className="w-4 h-4 text-white" fill="currentColor" />
+                        )}
+                    </button>
+                </div>
+
                 {/* Drag handle - visual indicator only, whole card is draggable */}
                 <div 
-                    className="drag-handle absolute left-0 top-0 bottom-0 w-10 sm:w-12 md:w-14 flex items-center justify-center z-10 pointer-events-none"
+                    className="drag-handle absolute left-8 top-0 bottom-0 w-4 sm:w-6 md:w-8 flex items-center justify-center z-10 pointer-events-none"
                 >
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
@@ -477,7 +581,7 @@ export function TaskCard({ task, onEdit, onDelete, allTags = [], columnId, onMov
                 
                 {/* At Risk Indicator - positioned above title to avoid footer overlap */}
                 {isAtRisk && (
-                    <div className="absolute top-2 left-12 sm:left-14 md:left-16 z-20">
+                    <div className="absolute top-2 left-14 sm:left-16 md:left-18 z-20">
                         <div className="bg-red-500 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm">
                             AT RISK
                         </div>
