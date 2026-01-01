@@ -169,29 +169,45 @@ export function Insights({ tasks }: InsightsProps) {
             )}
           </button>
           {isStrategyExpanded && (
-            <div className="p-4 border-t border-gray-800">
+            <div className="p-4 border-t border-gray-800 space-y-4">
               {isLoadingBriefing && (
-                <div className="text-gray-500 text-sm py-2">Loading...</div>
+                <div className="text-gray-500 text-sm py-4 text-center">Loading strategy...</div>
               )}
               {error && (
-                <div className="text-red-400 text-sm py-2">{error}</div>
+                <div className="text-red-400 text-sm py-4 text-center bg-red-900/20 rounded-lg border border-red-900/30 px-4">
+                  {error}
+                </div>
               )}
               {briefing && !isLoadingBriefing && !error && (
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-800">
-                  <p className="text-white text-sm leading-relaxed">
-                    {briefing.headline}
-                  </p>
+                <>
+                  {/* Readiness Score - Prominent */}
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+                    <span className="text-xs text-gray-500 uppercase tracking-widest">Readiness</span>
+                    <div className="text-2xl font-bold text-emerald-500">{briefing.readinessScore}%</div>
+                  </div>
+
+                  {/* Headline - Clean and Prominent */}
+                  <div className="bg-gradient-to-r from-emerald-500/10 to-transparent border-l-2 border-emerald-500/50 pl-4 py-3 rounded">
+                    <p className="text-white text-base font-semibold leading-snug">
+                      {briefing.headline}
+                    </p>
+                  </div>
+
+                  {/* Key Insights - Clean List */}
                   {briefing.tacticalPoints && briefing.tacticalPoints.length > 0 && (
-                    <ul className="mt-3 space-y-2">
-                      {briefing.tacticalPoints.map((point, idx) => (
-                        <li key={idx} className="text-gray-300 text-sm leading-relaxed flex items-start gap-2">
-                          <span className="text-emerald-500 mt-1">•</span>
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="space-y-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-widest">Key Insights</div>
+                      <ul className="space-y-2.5">
+                        {briefing.tacticalPoints.map((point, idx) => (
+                          <li key={idx} className="flex items-start gap-3 text-gray-300 text-sm leading-relaxed">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 flex-shrink-0" />
+                            <span className="flex-1">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}
