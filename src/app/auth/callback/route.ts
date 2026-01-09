@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
       if (isCapacitor) {
         // For Capacitor, redirect to app using custom URL scheme
         // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
-        const appServerUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://usesitrep.com'
-        const appUrl = `${appServerUrl}/app?google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
+        // Use custom URL scheme to open the app
+        const appUrl = `com.sitrep.app://auth/callback?code=${code}&google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
         
         console.log('[Auth Callback] Capacitor detected, redirecting to app')
         
@@ -180,8 +180,8 @@ setTimeout(() => {
 
     if (isCapacitor) {
       // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
-      const appServerUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://usesitrep.com'
-      const appUrl = `${appServerUrl}/app?code=${code}`
+      // Use custom URL scheme to open the app
+      const appUrl = `com.sitrep.app://auth/callback?code=${code}`
       console.log('[Auth Callback] Capacitor detected (no provider token), redirecting to app')
       
       return new NextResponse(

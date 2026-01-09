@@ -209,6 +209,55 @@ export function CapacitorInit() {
               errorMessage: err?.message,
             });
           });
+          
+          // Handle deep links (OAuth callbacks, etc.)
+          App.addListener('appUrlOpen', (data: { url: string }) => {
+            logToXcode('log', '[Capacitor] App opened with URL:', data.url);
+            
+            // Handle OAuth callback deep links
+            if (data.url.startsWith('com.sitrep.app://auth/callback')) {
+              try {
+                const url = new URL(data.url);
+                const code = url.searchParams.get('code');
+                const googleToken = url.searchParams.get('google_token');
+                const googleRefresh = url.searchParams.get('google_refresh');
+                const fromSupabase = url.searchParams.get('from_supabase');
+                
+                logToXcode('log', '[Capacitor] OAuth callback detected:', {
+                  hasCode: !!code,
+                  hasToken: !!googleToken,
+                  fromSupabase: fromSupabase === 'true'
+                });
+                
+                // Navigate to auth callback in WebView to complete session setup
+                // This ensures cookies are set in the WebView context
+                const callbackUrl = new URL('/auth/callback', window.location.origin);
+                if (code) callbackUrl.searchParams.set('code', code);
+                if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
+                if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
+                if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
+                
+                logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
+                window.location.href = callbackUrl.toString();
+              } catch (err: any) {
+                logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen:', {
+                  error: err,
+                  errorType: typeof err,
+                  errorString: String(err),
+                  errorStack: err?.stack,
+                  errorMessage: err?.message,
+                });
+              }
+            }
+          }).catch((err: any) => {
+            logToXcode('error', '[CapacitorInit] ❌ Error adding appUrlOpen listener:', {
+              error: err,
+              errorType: typeof err,
+              errorString: String(err),
+              errorStack: err?.stack,
+              errorMessage: err?.message,
+            });
+          });
         } else {
           logToXcode('warn', '[CapacitorInit] ⚠️ App or App.addListener not available');
         }
