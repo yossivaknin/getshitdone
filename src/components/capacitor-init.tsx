@@ -211,6 +211,7 @@ export function CapacitorInit() {
           });
           
           // Handle deep links (OAuth callbacks, etc.)
+          logToXcode('log', '[CapacitorInit] Adding appUrlOpen listener for deep links...');
           App.addListener('appUrlOpen', (data: { url: string }) => {
             logToXcode('log', '[Capacitor] App opened with URL:', data.url);
             

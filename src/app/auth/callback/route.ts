@@ -144,7 +144,9 @@ setTimeout(() => {
               <div class="container">
                 <div class="spinner"></div>
                 <h2>Redirecting to SITREP...</h2>
+                <a href="${appUrl.replace(/'/g, "\'")}" id="open-app-btn" style="display: inline-block; margin-top: 1rem; padding: 0.75rem 1.5rem; background: #10b981; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 500;">Open SITREP App</a>
                 <p>Please wait while we return you to the app.</p>
+                <a href="${appUrl.replace(/'/g, "\'")}" id="open-app-btn" style="display: inline-block; margin-top: 1rem; padding: 0.75rem 1.5rem; background: #10b981; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 500;">Open SITREP App</a>
               </div>
             </body>
           </html>`,
@@ -218,6 +220,7 @@ setTimeout(() => {
             <div class="container">
               <div class="spinner"></div>
               <h2>Redirecting to SITREP...</h2>
+                <a href="${appUrl.replace(/'/g, "\'")}" id="open-app-btn" style="display: inline-block; margin-top: 1rem; padding: 0.75rem 1.5rem; background: #10b981; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 500;">Open SITREP App</a>
             </div>
           </body>
         </html>`,
