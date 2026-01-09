@@ -103,10 +103,12 @@ export async function GET(request: NextRequest) {
                           // Also check if request came from our app domain (Supabase redirects here)
                           (referer && referer.includes('usesitrep.com') && userAgent.includes('iPhone'))
 
-      if (isCapacitor) {
-        // For Capacitor, redirect to app using custom URL scheme
-        // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
-        // Use custom URL scheme to open the app
+      // Check if request is from WebView (already in app) vs Safari (external)
+      const requestOrigin = requestUrl.origin
+      const isFromWebView = requestOrigin.includes('usesitrep.com') || requestOrigin.includes('localhost')
+      
+      if (isCapacitor && !isFromWebView) {
+        // Request is from Safari (external) - redirect to app using custom URL scheme
         const appUrl = `com.sitrep.app://auth/callback?code=${code}&google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
         
         console.log('[Auth Callback] Capacitor detected, redirecting to app');
@@ -197,9 +199,12 @@ setTimeout(() => {
                           // Also check if request came from our app domain (Supabase redirects here)
                           (referer && referer.includes('usesitrep.com') && userAgent.includes('iPhone'))
 
-    if (isCapacitor) {
-      // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
-      // Use custom URL scheme to open the app
+    // Check if request is from WebView (already in app) vs Safari (external)
+    const requestOrigin = requestUrl.origin
+    const isFromWebView = requestOrigin.includes('usesitrep.com') || requestOrigin.includes('localhost')
+    
+    if (isCapacitor && !isFromWebView) {
+      // Request is from Safari (external) - redirect to app using custom URL scheme
       const appUrl = `com.sitrep.app://auth/callback?code=${code}`
       console.log('[Auth Callback] Capacitor detected (no provider token), redirecting to app')
       

@@ -212,11 +212,28 @@ export function CapacitorInit() {
           
           // Handle deep links (OAuth callbacks, etc.)
           logToXcode('log', '[CapacitorInit] Adding appUrlOpen listener for deep links...');
+          // Track processed URLs to prevent duplicate handling
+          let processedUrls = new Set<string>();
+          
           App.addListener('appUrlOpen', (data: { url: string }) => {
             logToXcode('log', '[Capacitor] App opened with URL:', data.url);
             
+            // Prevent processing the same URL multiple times
+            if (processedUrls.has(data.url)) {
+              logToXcode('warn', '[Capacitor] URL already processed, ignoring:', data.url);
+              return;
+            }
+            
             // Handle OAuth callback deep links
             if (data.url.startsWith('com.sitrep.app://auth/callback')) {
+              // Mark as processed immediately
+              processedUrls.add(data.url);
+              
+              // Also check if we're already on the callback page to prevent loops
+              if (typeof window !== 'undefined' && window.location.pathname === '/auth/callback') {
+                logToXcode('warn', '[Capacitor] Already on callback page, ignoring deep link to prevent loop');
+                return;
+              }
               try {
                 const url = new URL(data.url);
                 const code = url.searchParams.get('code');
