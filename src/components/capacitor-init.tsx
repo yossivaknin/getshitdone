@@ -239,7 +239,28 @@ export function CapacitorInit() {
                 if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
                 
                 logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
-                window.location.href = callbackUrl.toString();
+                
+                // Try to navigate - if it fails, show error
+                try {
+                  window.location.href = callbackUrl.toString();
+                  // Fallback: try replace if href doesn't work
+                  setTimeout(() => {
+                    if (window.location.href !== callbackUrl.toString()) {
+                      logToXcode('warn', '[Capacitor] Initial navigation failed, trying replace...');
+                      window.location.replace(callbackUrl.toString());
+                    }
+                  }, 500);
+                } catch (navErr: any) {
+                  logToXcode('error', '[CapacitorInit] ❌ Navigation error:', {
+                    error: navErr,
+                    errorMessage: navErr?.message,
+                    callbackUrl: callbackUrl.toString()
+                  });
+                  // Fallback: try router if available
+                  if ((window as any).router) {
+                    (window as any).router.push(callbackUrl.pathname + callbackUrl.search);
+                  }
+                }
               } catch (err: any) {
                 logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen:', {
                   error: err,
