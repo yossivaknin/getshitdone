@@ -167,11 +167,25 @@ export async function loginWithGoogle() {
     const protocol = headersList.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https')
     const origin = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`
     
-    // Construct redirect URL - Supabase will use this after OAuth
-    const redirectUrl = `${origin}/auth/callback`
+    // Detect if this is from Capacitor (mobile app)
+    const userAgent = headersList.get('user-agent') || ''
+    const isCapacitor = userAgent.includes('Capacitor') || userAgent.includes('iPhone') || userAgent.includes('iPad')
+    
+    // Construct redirect URL - use custom URL scheme for mobile, web URL for browser
+    let redirectUrl: string
+    if (isCapacitor) {
+      // For mobile, use custom URL scheme so app opens directly after OAuth
+      redirectUrl = 'com.sitrep.app://auth/callback'
+      console.log('[Login] Capacitor detected, using custom URL scheme for OAuth redirect')
+    } else {
+      // For web, use web URL
+      redirectUrl = `${origin}/auth/callback`
+      console.log('[Login] Web browser detected, using web URL for OAuth redirect')
+    }
     
     console.log('Initiating Google OAuth with redirect URL:', redirectUrl)
     console.log('Detected origin:', origin, 'from host:', host, 'protocol:', protocol)
+    console.log('User-Agent:', userAgent.substring(0, 100))
     
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
