@@ -265,21 +265,29 @@ export function CapacitorInit() {
                 // Try to navigate - if it fails, show error
                 try {
                   logToXcode('log', '[Capacitor] Attempting navigation to:', callbackUrl.toString());
-                  window.location.href = callbackUrl.toString();
-                  logToXcode('log', '[Capacitor] Navigation initiated, waiting for page load...');
-                  // Fallback: try replace if href doesn't work
+                  
+                  // Use location.replace first (less likely to be cancelled than href)
+                  // Error -999 means navigation was cancelled, replace is more reliable
+                  logToXcode('log', '[Capacitor] Using location.replace (more reliable than href)');
+                  window.location.replace(callbackUrl.toString());
+                  
+                  // Fallback: if replace doesn't work, try href after a delay
                   setTimeout(() => {
                     const currentUrl = window.location.href;
-                    logToXcode('log', '[Capacitor] Checking navigation status after 500ms...');
+                    logToXcode('log', '[Capacitor] Checking navigation status after 300ms...');
                     logToXcode('log', '[Capacitor] Current URL:', currentUrl);
                     logToXcode('log', '[Capacitor] Target URL:', callbackUrl.toString());
-                    if (currentUrl !== callbackUrl.toString() && !currentUrl.includes(callbackUrl.pathname)) {
-                      logToXcode('warn', '[Capacitor] Initial navigation failed, trying replace...');
-                      window.location.replace(callbackUrl.toString());
+                    if (!currentUrl.includes(callbackUrl.pathname)) {
+                      logToXcode('warn', '[Capacitor] Replace may have failed, trying href as fallback...');
+                      try {
+                        window.location.href = callbackUrl.toString();
+                      } catch (e) {
+                        logToXcode('error', '[Capacitor] Both navigation methods failed:', e);
+                      }
                     } else {
-                      logToXcode('log', '[Capacitor] Navigation appears successful');
+                      logToXcode('log', '[Capacitor] Navigation successful');
                     }
-                  }, 500);
+                  }, 300);
                 } catch (navErr: any) {
                   logToXcode('error', '[CapacitorInit] ❌ Navigation error:', {
                     error: navErr,
