@@ -41,13 +41,21 @@ export async function middleware(request: NextRequest) {
     // Get the current session (with timeout to prevent hanging)
     let session = null
     try {
+      // If this is right after auth completion, wait a bit longer for cookies
+      const isAuthComplete = request.nextUrl.searchParams.get('auth_complete') === 'true'
+      const timeout = isAuthComplete ? 3000 : 2000
+      
       const { data } = await Promise.race([
         supabase.auth.getSession(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 2000)
+          setTimeout(() => reject(new Error('Session check timeout')), timeout)
         )
       ]) as any
       session = data?.session
+      
+      if (isAuthComplete && !session) {
+        console.log('[Middleware] Auth just completed but no session yet, checking cookies:', request.cookies.getAll().map(c => c.name))
+      }
     } catch (err) {
       // If session check fails, fail open (allow request)
       console.error('[Middleware] Session check failed:', err)

@@ -29,9 +29,11 @@ export async function GET(request: NextRequest) {
                 response.cookies.set(name, value, {
                   ...options,
                   maxAge: 60 * 60 * 24 * 365, // 1 year in seconds
-                  sameSite: 'lax',
+                  sameSite: 'lax', // Use 'lax' for Capacitor compatibility
                   secure: process.env.NODE_ENV === 'production',
                   httpOnly: true,
+                  path: '/', // Ensure cookies are available for all paths
+                  // Don't set domain - let browser handle it (works better in Capacitor)
                 })
               } else {
                 response.cookies.set(name, value, options)
@@ -182,8 +184,12 @@ setTimeout(() => {
         redirectUrl.searchParams.set('google_refresh', providerRefreshToken)
       }
       redirectUrl.searchParams.set('from_supabase', 'true')
+      redirectUrl.searchParams.set('auth_complete', 'true') // Flag for middleware
 
       console.log('[Auth Callback] Redirecting to:', redirectUrl.toString())
+      console.log('[Auth Callback] Response cookies:', response.cookies.getAll().map(c => c.name))
+      
+      // Ensure cookies are included in redirect response
       response.headers.set('location', redirectUrl.toString())
       response.status = 302
       return response
