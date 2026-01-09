@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  console.log('[Auth Callback] ========== CALLBACK ROUTE CALLED ==========');
+  console.log('[Auth Callback] Request URL:', request.url);
+  console.log('[Auth Callback] Request origin:', new URL(request.url).origin);
+  console.log('[Auth Callback] User-Agent:', request.headers.get('user-agent')?.substring(0, 100));
+  console.log('[Auth Callback] Referer:', request.headers.get('referer'));
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const next = requestUrl.searchParams.get('next') || '/app'
@@ -44,7 +49,17 @@ export async function GET(request: NextRequest) {
       }
     )
 
+        console.log('[Auth Callback] Exchanging code for session...');
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    console.log('[Auth Callback] Session exchange result:', {
+      hasError: !!error,
+      errorMessage: error?.message,
+      hasSession: !!sessionData?.session,
+      hasUser: !!sessionData?.session?.user,
+      userId: sessionData?.session?.user?.id,
+      hasProviderToken: !!sessionData?.session?.provider_token
+    });
     
     if (error) {
       console.error('OAuth callback error:', error)
@@ -186,8 +201,19 @@ setTimeout(() => {
       redirectUrl.searchParams.set('from_supabase', 'true')
       redirectUrl.searchParams.set('auth_complete', 'true') // Flag for middleware
 
-      console.log('[Auth Callback] Redirecting to:', redirectUrl.toString())
-      console.log('[Auth Callback] Response cookies:', response.cookies.getAll().map(c => c.name))
+      console.log('[Auth Callback] ========== REDIRECTING TO /app ==========');
+      console.log('[Auth Callback] Redirect URL:', redirectUrl.toString());
+      console.log('[Auth Callback] Response cookies count:', response.cookies.getAll().length);
+      console.log('[Auth Callback] Response cookies:', response.cookies.getAll().map(c => ({
+        name: c.name,
+        value: c.value ? c.value.substring(0, 20) + '...' : 'empty',
+        path: c.path,
+        domain: c.domain,
+        sameSite: c.sameSite,
+        secure: c.secure
+      })));
+      console.log('[Auth Callback] Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('[Auth Callback] Response status:', response.status)
       
       // Ensure cookies are included in redirect response
       response.headers.set('location', redirectUrl.toString())
