@@ -90,7 +90,64 @@ export async function GET(request: NextRequest) {
         console.warn('[Auth Callback] Error while attempting server-side token save:', err)
       }
 
-      // Pass tokens to client via URL params (client will save to localStorage and attempt to persist to DB)
+      // Detect if this is from Capacitor (mobile app)
+      const userAgent = request.headers.get('user-agent') || ''
+      const referer = request.headers.get('referer') || ''
+      const isCapacitor = userAgent.includes('Capacitor') || 
+                          requestUrl.searchParams.get('capacitor') === 'true' ||
+                          (userAgent.includes('Safari') && !userAgent.includes('Chrome') && referer === '')
+
+      if (isCapacitor) {
+        // For Capacitor, redirect to app using custom URL scheme
+        const appUrl = `com.sitrep.app://auth/callback?code=${code}&google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
+        
+        console.log('[Auth Callback] Capacitor detected, redirecting to app')
+        
+        // Return HTML page that redirects to the app
+        return new NextResponse(
+          `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Redirecting to SITREP...</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; }
+                .container { text-align: center; padding: 2rem; }
+                .spinner { border: 3px solid #1A1A1A; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+              </style>
+              <script>
+                (function() {
+                  const appUrl = '${appUrl.replace(/'/g, "\'")}';
+                  function openApp() {
+                    try { window.location.href = appUrl; setTimeout(() => window.location.replace(appUrl), 100); } catch (e) { console.error(e); }
+                  }
+                  openApp();
+                  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', openApp); } else { openApp(); }
+                  window.addEventListener('load', () => setTimeout(openApp, 50));
+                })();
+              </script>
+            </head>
+            <body>
+              <div class="container">
+                <div class="spinner"></div>
+                <h2>Redirecting to SITREP...</h2>
+                <p>Please wait while we return you to the app.</p>
+              </div>
+            </body>
+          </html>`,
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html',
+              ...Object.fromEntries(response.headers.entries()),
+            },
+          }
+        )
+      }
+
+      // For web, pass tokens to client via URL params
       const redirectUrl = new URL(next, request.url)
       redirectUrl.searchParams.set('google_token', providerToken)
       if (providerRefreshToken) {
@@ -98,11 +155,58 @@ export async function GET(request: NextRequest) {
       }
       redirectUrl.searchParams.set('from_supabase', 'true')
 
-      // Return the original response (so cookies set by supabase.exchangeCodeForSession are included)
-      // and redirect by setting Location header and 302 status. This ensures session cookies are sent to the browser.
       response.headers.set('location', redirectUrl.toString())
       response.status = 302
       return response
+    }
+
+    // Successful authentication - check if Capacitor
+    const userAgent = request.headers.get('user-agent') || ''
+    const referer = request.headers.get('referer') || ''
+    const isCapacitor = userAgent.includes('Capacitor') || 
+                        requestUrl.searchParams.get('capacitor') === 'true' ||
+                        (userAgent.includes('Safari') && !userAgent.includes('Chrome') && referer === '')
+
+    if (isCapacitor) {
+      const appUrl = `com.sitrep.app://auth/callback?code=${code}`
+      console.log('[Auth Callback] Capacitor detected (no provider token), redirecting to app')
+      
+      return new NextResponse(
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Redirecting to SITREP...</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; }
+              .container { text-align: center; padding: 2rem; }
+              .spinner { border: 3px solid #1A1A1A; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+              @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            </style>
+            <script>
+              (function() {
+                const appUrl = '${appUrl.replace(/'/g, "\'")}';
+                window.location.href = appUrl;
+                setTimeout(() => window.location.replace(appUrl), 100);
+              })();
+            </script>
+          </head>
+          <body>
+            <div class="container">
+              <div class="spinner"></div>
+              <h2>Redirecting to SITREP...</h2>
+            </div>
+          </body>
+        </html>`,
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html',
+            ...Object.fromEntries(response.headers.entries()),
+          },
+        }
+      )
     }
 
     // Successful authentication - cookies are set in response
