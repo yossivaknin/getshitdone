@@ -99,7 +99,9 @@ export async function GET(request: NextRequest) {
 
       if (isCapacitor) {
         // For Capacitor, redirect to app using custom URL scheme
-        const appUrl = `com.sitrep.app://auth/callback?code=${code}&google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
+        // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
+        const appServerUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://usesitrep.com'
+        const appUrl = `${appServerUrl}/app?google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
         
         console.log('[Auth Callback] Capacitor detected, redirecting to app')
         
@@ -121,7 +123,16 @@ export async function GET(request: NextRequest) {
                 (function() {
                   const appUrl = '${appUrl.replace(/'/g, "\'")}';
                   function openApp() {
-                    try { window.location.href = appUrl; setTimeout(() => window.location.replace(appUrl), 100); } catch (e) { console.error(e); }
+                    try { // Redirect to app's WebView URL (cookies will be available)
+window.location.href = appUrl;
+// Fallback: try to open app if WebView redirect doesn't work
+setTimeout(() => {
+  try {
+    window.location.replace(appUrl);
+  } catch (e) {
+    console.error('Redirect error:', e);
+  }
+}, 100); setTimeout(() => window.location.replace(appUrl), 100); } catch (e) { console.error(e); }
                   }
                   openApp();
                   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', openApp); } else { openApp(); }
@@ -168,7 +179,9 @@ export async function GET(request: NextRequest) {
                         (userAgent.includes('Safari') && !userAgent.includes('Chrome') && referer === '')
 
     if (isCapacitor) {
-      const appUrl = `com.sitrep.app://auth/callback?code=${code}`
+      // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
+      const appServerUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://usesitrep.com'
+      const appUrl = `${appServerUrl}/app?code=${code}`
       console.log('[Auth Callback] Capacitor detected (no provider token), redirecting to app')
       
       return new NextResponse(
@@ -187,7 +200,16 @@ export async function GET(request: NextRequest) {
             <script>
               (function() {
                 const appUrl = '${appUrl.replace(/'/g, "\'")}';
-                window.location.href = appUrl;
+                // Redirect to app's WebView URL (cookies will be available)
+window.location.href = appUrl;
+// Fallback: try to open app if WebView redirect doesn't work
+setTimeout(() => {
+  try {
+    window.location.replace(appUrl);
+  } catch (e) {
+    console.error('Redirect error:', e);
+  }
+}, 100);
                 setTimeout(() => window.location.replace(appUrl), 100);
               })();
             </script>
