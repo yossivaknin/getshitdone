@@ -103,7 +103,12 @@ export async function GET(request: NextRequest) {
         // Use custom URL scheme to open the app
         const appUrl = `com.sitrep.app://auth/callback?code=${code}&google_token=${encodeURIComponent(providerToken)}${providerRefreshToken ? `&google_refresh=${encodeURIComponent(providerRefreshToken)}` : ''}&from_supabase=true`
         
-        console.log('[Auth Callback] Capacitor detected, redirecting to app')
+        console.log('[Auth Callback] Capacitor detected, redirecting to app');
+        console.log('[Auth Callback] User-Agent:', userAgent);
+        console.log('[Auth Callback] Referer:', referer);
+        console.log('[Auth Callback] App URL:', appUrl);
+        console.log('[Auth Callback] Code:', code ? code.substring(0, 20) + '...' : 'none');
+        console.log('[Auth Callback] Provider Token:', providerToken ? providerToken.substring(0, 20) + '...' : 'none');
         
         // Return HTML page that redirects to the app
         return new NextResponse(
