@@ -95,7 +95,10 @@ export async function GET(request: NextRequest) {
       const referer = request.headers.get('referer') || ''
       const isCapacitor = userAgent.includes('Capacitor') || 
                           requestUrl.searchParams.get('capacitor') === 'true' ||
-                          (userAgent.includes('Safari') && !userAgent.includes('Chrome') && referer === '')
+                          // Detect iOS Safari (common when OAuth opens in Safari from app)
+                          (userAgent.includes('Safari') && !userAgent.includes('Chrome') && (referer === '' || userAgent.includes('iPhone') || userAgent.includes('iPad'))) ||
+                          // Also check if request came from our app domain (Supabase redirects here)
+                          (referer && referer.includes('usesitrep.com') && userAgent.includes('iPhone'))
 
       if (isCapacitor) {
         // For Capacitor, redirect to app using custom URL scheme
@@ -181,9 +184,12 @@ setTimeout(() => {
     // Successful authentication - check if Capacitor
     const userAgent = request.headers.get('user-agent') || ''
     const referer = request.headers.get('referer') || ''
-    const isCapacitor = userAgent.includes('Capacitor') || 
-                        requestUrl.searchParams.get('capacitor') === 'true' ||
-                        (userAgent.includes('Safari') && !userAgent.includes('Chrome') && referer === '')
+      const isCapacitor = userAgent.includes('Capacitor') || 
+                          requestUrl.searchParams.get('capacitor') === 'true' ||
+                          // Detect iOS Safari (common when OAuth opens in Safari from app)
+                          (userAgent.includes('Safari') && !userAgent.includes('Chrome') && (referer === '' || userAgent.includes('iPhone') || userAgent.includes('iPad'))) ||
+                          // Also check if request came from our app domain (Supabase redirects here)
+                          (referer && referer.includes('usesitrep.com') && userAgent.includes('iPhone'))
 
     if (isCapacitor) {
       // For Capacitor, redirect to app's server URL (opens in WebView with cookies)
