@@ -4,6 +4,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
+import { headers } from 'next/headers'
 
 export async function login(formData: FormData) {
   let supabase
@@ -160,12 +161,17 @@ export async function loginWithGoogle() {
   }
   
   try {
+    // Get the current request origin dynamically
+    const headersList = await headers()
+    const host = headersList.get('host') || ''
+    const protocol = headersList.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https')
+    const origin = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`
+    
     // Construct redirect URL - Supabase will use this after OAuth
-    const redirectUrl = process.env.NEXT_PUBLIC_APP_URL 
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
-      : 'http://localhost:3000/auth/callback'
+    const redirectUrl = `${origin}/auth/callback`
     
     console.log('Initiating Google OAuth with redirect URL:', redirectUrl)
+    console.log('Detected origin:', origin, 'from host:', host, 'protocol:', protocol)
     
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
