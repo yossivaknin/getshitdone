@@ -256,15 +256,28 @@ export function CapacitorInit() {
                 if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
                 
                 logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
+                logToXcode('log', '[Capacitor] Current window location:', window.location.href);
+                logToXcode('log', '[Capacitor] Window origin:', window.location.origin);
+                logToXcode('log', '[Capacitor] Callback URL origin:', callbackUrl.origin);
+                logToXcode('log', '[Capacitor] Callback URL pathname:', callbackUrl.pathname);
+                logToXcode('log', '[Capacitor] Callback URL search:', callbackUrl.search);
                 
                 // Try to navigate - if it fails, show error
                 try {
+                  logToXcode('log', '[Capacitor] Attempting navigation to:', callbackUrl.toString());
                   window.location.href = callbackUrl.toString();
+                  logToXcode('log', '[Capacitor] Navigation initiated, waiting for page load...');
                   // Fallback: try replace if href doesn't work
                   setTimeout(() => {
-                    if (window.location.href !== callbackUrl.toString()) {
+                    const currentUrl = window.location.href;
+                    logToXcode('log', '[Capacitor] Checking navigation status after 500ms...');
+                    logToXcode('log', '[Capacitor] Current URL:', currentUrl);
+                    logToXcode('log', '[Capacitor] Target URL:', callbackUrl.toString());
+                    if (currentUrl !== callbackUrl.toString() && !currentUrl.includes(callbackUrl.pathname)) {
                       logToXcode('warn', '[Capacitor] Initial navigation failed, trying replace...');
                       window.location.replace(callbackUrl.toString());
+                    } else {
+                      logToXcode('log', '[Capacitor] Navigation appears successful');
                     }
                   }, 500);
                 } catch (navErr: any) {

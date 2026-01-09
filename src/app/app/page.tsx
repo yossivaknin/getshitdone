@@ -19,6 +19,10 @@ const kanbanColumns = [
 ];
 
 export default function UnifiedViewPage() {
+  console.log('[App Page] ========== APP PAGE COMPONENT RENDERED ==========');
+  console.log('[App Page] Current URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
+  console.log('[App Page] Search params:', typeof window !== 'undefined' ? new URLSearchParams(window.location.search).toString() : 'SSR');
+  
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,6 +120,8 @@ export default function UnifiedViewPage() {
   // Load tasks and tags from database on mount (in parallel for better performance)
   useEffect(() => {
     const loadData = async () => {
+      console.log('[App Page] ========== LOADING DATA ==========');
+      console.log('[App Page] Starting data load...');
       setIsLoading(true);
       try {
         // Load tasks and tags in parallel
@@ -209,6 +215,8 @@ export default function UnifiedViewPage() {
             list_id: t.list_id
           }))
         });
+        console.log('[App Page] ✅ Data loaded successfully');
+        console.log('[App Page] Tasks count:', result.tasks?.length || 0);
         setTasks(result.tasks || []);
       }
     } catch (error: any) {
