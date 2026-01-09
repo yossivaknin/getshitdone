@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     // Create response object first to handle cookies
-    const response = NextResponse.redirect(new URL(next, request.url))
+    // Use production URL for redirect to ensure it works in Capacitor WebView
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
+    const response = NextResponse.redirect(new URL(next, baseUrl))
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,8 +46,9 @@ export async function GET(request: NextRequest) {
     
     if (error) {
       console.error('OAuth callback error:', error)
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
       return NextResponse.redirect(
-        new URL('/login?message=' + encodeURIComponent('Authentication failed: ' + error.message), request.url)
+        new URL('/login?message=' + encodeURIComponent('Authentication failed: ' + error.message), baseUrl)
       )
     }
 
@@ -169,13 +172,16 @@ setTimeout(() => {
       }
 
       // For web, pass tokens to client via URL params
-      const redirectUrl = new URL(next, request.url)
+      // Use production URL for redirect to ensure it works in Capacitor WebView
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
+      const redirectUrl = new URL(next, baseUrl)
       redirectUrl.searchParams.set('google_token', providerToken)
       if (providerRefreshToken) {
         redirectUrl.searchParams.set('google_refresh', providerRefreshToken)
       }
       redirectUrl.searchParams.set('from_supabase', 'true')
 
+      console.log('[Auth Callback] Redirecting to:', redirectUrl.toString())
       response.headers.set('location', redirectUrl.toString())
       response.status = 302
       return response
@@ -250,8 +256,9 @@ setTimeout(() => {
   }
 
   // If there's no code, redirect to login
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
   return NextResponse.redirect(
-    new URL('/login?message=' + encodeURIComponent('Authentication failed: No authorization code'), request.url)
+    new URL('/login?message=' + encodeURIComponent('Authentication failed: No authorization code'), baseUrl)
   )
 }
 
