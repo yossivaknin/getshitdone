@@ -17,8 +17,6 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { Column } from './Column'
-import { CreateTaskDialog } from '@/components/create-task-dialog';
-import { TaskCard } from './TaskCard'
 import toast from 'react-hot-toast'
 import { createTask, updateTask, deleteTask, updateTaskStatus } from '@/app/actions'
 
@@ -41,7 +39,7 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     const skipSyncRef = useRef(false);
     const [internalCreateDialogOpen, setInternalCreateDialogOpen] = useState(false);
     const [createDialogListId, setCreateDialogListId] = useState<string>('queue'); // Default to first column
-    const [mobileSelectedTab, setMobileSelectedTab] = useState<string>('all'); // Default to 'all' to show all tasks
+    const [mobileSelectedTab, setMobileSelectedTab] = useState<string>('queue'); // Mobile tab selection
     const [isMobile, setIsMobile] = useState(false); // Track if we're on mobile
     
     // Use external control if provided, otherwise use internal state
@@ -57,20 +55,6 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
     // Optimized sync with external changes - use ref to track previous tasks for efficient comparison
     const prevTasksRef = useRef<string>('');
     
-
-    // When external createDialogOpen becomes true, set the appropriate listId
-    useEffect(() => {
-        if (externalCreateDialogOpen && externalCreateDialogOpen !== undefined) {
-            // If on mobile and a tab is selected, use that tab's listId
-            // Otherwise default to 'queue'
-            if (isMobile && mobileSelectedTab !== 'all' && mobileSelectedTab !== 'queue') {
-                setCreateDialogListId(mobileSelectedTab);
-            } else {
-                // Default to 'queue' for desktop or when 'all' tab is selected
-                setCreateDialogListId('queue');
-            }
-        }
-    }, [externalCreateDialogOpen, isMobile, mobileSelectedTab]);
     useEffect(() => {
         if (skipSyncRef.current) {
             skipSyncRef.current = false;
@@ -873,16 +857,6 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
                 {/* Mobile Tab Bar - Only show on mobile (below md) */}
                 <div className="md:hidden px-3 sm:px-4 pt-2 pb-3 flex-shrink-0 border-b border-gray-800">
                     <div className="flex gap-1 bg-gray-900 p-1 rounded-lg">
-                        <button
-                            onClick={() => setMobileSelectedTab('all')}
-                            className={`flex-1 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all ${
-                                mobileSelectedTab === 'all'
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-gray-800 text-gray-400'
-                            }`}
-                        >
-                            ALL
-                        </button>
                         {initialLists.map((list) => {
                             const isActive = mobileSelectedTab === list.id;
                             // Use the list title directly (already uppercase)
@@ -907,64 +881,9 @@ export function Board({ lists: initialLists, tasks: initialTasks, workspaceId, s
 
                 {/* Columns - Stack vertically on mobile (single tab), horizontal on tablet+ */}
                 <div className="flex flex-col md:flex-row flex-1 gap-4 md:gap-5 lg:gap-6 px-3 sm:px-4 md:px-5 lg:px-6 pb-4 sm:pb-6 overflow-y-auto md:overflow-x-auto md:overflow-y-hidden">
-                    {/* All Tasks View - Only show on mobile when 'all' tab is selected */}
-                    {isMobile && mobileSelectedTab === 'all' && (
-                        <div className="flex flex-col w-full gap-6 pb-4">
-                            {initialLists.map((list) => {
-                                const listTasks = tasksByList[list.id] || [];
-                                if (listTasks.length === 0) return null;
-                                
-                                return (
-                                    <div key={list.id} className="flex flex-col">
-                                        {/* Column Divider */}
-                                        <div className="flex items-center gap-2 mb-4 px-2">
-                                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-sm flex-shrink-0" />
-                                            <h2 className="font-semibold text-white text-sm tracking-wide uppercase">
-                                                {list.title} ({listTasks.length})
-                                            </h2>
-                                            <div className="flex-1 h-px bg-gray-800" />
-                                        </div>
-                                        
-                                        {/* Tasks for this column */}
-                                        <div className="space-y-3 px-2">
-                                            {listTasks.map((task: any) => (
-                                                <TaskCard 
-                                                    key={task.id} 
-                                                    task={{ ...task, list_id: task.list_id || list.id }} 
-                                                    onEdit={handleUpdateTask}
-                                                    onDelete={handleDeleteTask}
-                                                    allTags={allTags}
-                                                    columnId={list.id}
-                                                    onMoveTask={handleUpdateTask}
-                                                    onRefreshTasks={onRefreshTasks}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            
-                            {/* Show message if no tasks */}
-                            {filteredTasks.length === 0 && (
-                                <div className="h-32 border-2 border-dashed border-gray-800 rounded-md flex flex-col gap-2 items-center justify-center text-sm text-gray-500 bg-gray-900/30 px-2">
-                                    <span className="text-center">No tasks yet</span>
-                                </div>
-                            )}
-                            
-                            {/* Create Task Dialog for All View */}
-                            <CreateTaskDialog
-                                listId={createDialogListId || 'queue'}
-                                workspaceId={workspaceId}
-                                onCreateTask={handleCreateTask}
-                                allTags={allTags}
-                                open={createDialogOpen}
-                                onOpenChange={setCreateDialogOpen}
-                            />
-                        </div>
-                    )}
                     {initialLists.map((list) => {
                         // On mobile, only show the selected tab's column
-                        const shouldShow = isMobile ? (mobileSelectedTab === 'all' ? false : mobileSelectedTab === list.id) : true;
+                        const shouldShow = isMobile ? mobileSelectedTab === list.id : true;
                         
                         if (!shouldShow) return null;
                         

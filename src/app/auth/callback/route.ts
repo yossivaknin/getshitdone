@@ -55,16 +55,54 @@ export async function GET(request: NextRequest) {
       console.log('[Auth Callback] Found provider token in Supabase session')
       const providerToken = sessionData.session.provider_token
       const providerRefreshToken = sessionData.session.provider_refresh_token
-      
-      // Pass tokens to client via URL params (will be saved to localStorage on client side)
+
+      // Attempt to persist tokens server-side using service role (optional)
+      // This will allow mobile + web to share the same stored refresh token
+      try {
+        if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+          // Dynamically import supabase-js to avoid bundling on client
+          const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+          const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+          const upsertData: any = {
+            user_id: sessionData.session.user?.id,
+            google_access_token: providerToken,
+            google_refresh_token: providerRefreshToken || null,
+            updated_at: new Date().toISOString()
+          }
+
+          // token_expires_at may be present in sessionData.session.expires_at (seconds since epoch)
+          if ((sessionData.session as any).expires_at) {
+            const expiresAtSec = (sessionData.session as any).expires_at
+            try {
+              upsertData.token_expires_at = new Date(expiresAtSec * 1000).toISOString()
+            } catch { /* ignore */ }
+          }
+
+          try {
+            await admin.from('user_tokens').upsert(upsertData, { onConflict: 'user_id' })
+            console.log('[Auth Callback] ✅ Tokens saved server-side using service role')
+          } catch (err) {
+            console.warn('[Auth Callback] Could not save tokens server-side:', err)
+          }
+        }
+      } catch (err) {
+        console.warn('[Auth Callback] Error while attempting server-side token save:', err)
+      }
+
+      // Pass tokens to client via URL params (client will save to localStorage and attempt to persist to DB)
       const redirectUrl = new URL(next, request.url)
       redirectUrl.searchParams.set('google_token', providerToken)
       if (providerRefreshToken) {
         redirectUrl.searchParams.set('google_refresh', providerRefreshToken)
       }
       redirectUrl.searchParams.set('from_supabase', 'true')
-      
-      return NextResponse.redirect(redirectUrl)
+
+      // Return the original response (so cookies set by supabase.exchangeCodeForSession are included)
+      // and redirect by setting Location header and 302 status. This ensures session cookies are sent to the browser.
+      response.headers.set('location', redirectUrl.toString())
+      response.status = 302
+      return response
     }
 
     // Successful authentication - cookies are set in response

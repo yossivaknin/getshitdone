@@ -168,87 +168,6 @@ export default function SettingsPage() {
     setTimeout(checkTokenOnMount, 200);
     setTimeout(checkTokenOnMount, 500);
   }, []);
-  // #region agent log - Mobile layout debugging
-  useEffect(() => {
-    const logLayoutInfo = () => {
-      if (typeof window === 'undefined') return;
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const isMobile = width < 768;
-      
-      fetch('http://127.0.0.1:7242/ingest/bbe2b18e-8946-4f9b-99f0-e0e7eda9850e', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'settings/page.tsx:useEffect:layout',
-          message: 'Viewport dimensions',
-          data: { width, height, isMobile, userAgent: navigator.userAgent.substring(0, 50) },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'A'
-        })
-      }).catch(() => {});
-      
-      // Check for overflow issues
-      setTimeout(() => {
-        const headerSection = document.querySelector('[data-settings-header]');
-        const buttonGroup = document.querySelector('[data-settings-buttons]');
-        if (headerSection) {
-          const headerRect = headerSection.getBoundingClientRect();
-          const headerOverflow = headerSection.scrollWidth > headerSection.clientWidth;
-          fetch('http://127.0.0.1:7242/ingest/bbe2b18e-8946-4f9b-99f0-e0e7eda9850e', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              location: 'settings/page.tsx:useEffect:header-overflow',
-              message: 'Header section overflow check',
-              data: { 
-                width: headerRect.width, 
-                scrollWidth: headerSection.scrollWidth,
-                clientWidth: headerSection.clientWidth,
-                hasOverflow: headerOverflow,
-                isMobile
-              },
-              timestamp: Date.now(),
-              sessionId: 'debug-session',
-              runId: 'run1',
-              hypothesisId: 'B'
-            })
-          }).catch(() => {});
-        }
-        if (buttonGroup) {
-          const buttonRect = buttonGroup.getBoundingClientRect();
-          const buttonOverflow = buttonGroup.scrollWidth > buttonGroup.clientWidth;
-          fetch('http://127.0.0.1:7242/ingest/bbe2b18e-8946-4f9b-99f0-e0e7eda9850e', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              location: 'settings/page.tsx:useEffect:button-overflow',
-              message: 'Button group overflow check',
-              data: { 
-                width: buttonRect.width, 
-                scrollWidth: buttonGroup.scrollWidth,
-                clientWidth: buttonGroup.clientWidth,
-                hasOverflow: buttonOverflow,
-                isMobile
-              },
-              timestamp: Date.now(),
-              sessionId: 'debug-session',
-              runId: 'run1',
-              hypothesisId: 'D'
-            })
-          }).catch(() => {});
-        }
-      }, 500);
-    };
-    
-    logLayoutInfo();
-    window.addEventListener('resize', logLayoutInfo);
-    return () => window.removeEventListener('resize', logLayoutInfo);
-  }, []);
-  // #endregion
-
 
   // Listen for storage changes and app visibility (for Capacitor deep link tokens)
   useEffect(() => {
@@ -717,40 +636,40 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F0F0F] p-4 sm:p-6 md:p-8 safe-top" data-settings-container="true" style={{ paddingTop: `calc(2rem + env(safe-area-inset-top))` }}>
+    <div className="min-h-screen bg-[#F4F5F7] p-8 safe-top" style={{ paddingTop: `calc(2rem + env(safe-area-inset-top))` }}>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Link
             href="/app"
-            className="mb-4 inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+            className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Mission Control
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-gray-400">Configure your Google Calendar integration</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
+          <p className="text-gray-500">Configure your Google Calendar integration</p>
         </div>
 
         {/* Google Calendar Connection */}
-        <div className="bg-[#1A1A1A] rounded-md border border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4" data-settings-header="true">
+        <div className="bg-white rounded-md shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-emerald-500" />
+              <Calendar className="w-6 h-6 text-blue-500" />
               <div>
-                <h2 className="text-lg font-semibold text-white">Google Calendar</h2>
-                <p className="text-sm text-gray-400">Connect your calendar for smart scheduling</p>
+                <h2 className="text-lg font-semibold text-gray-900">Google Calendar</h2>
+                <p className="text-sm text-gray-500">Connect your calendar for smart scheduling</p>
               </div>
             </div>
             {isConnected ? (
-              <div className="flex flex-wrap items-center gap-2" data-settings-buttons="true">
+              <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-sm font-medium text-emerald-500">Connected</span>
+                <span className="text-sm font-medium text-green-600">Connected</span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTestConnection}
                   disabled={isLoading}
-                  className="ml-2 bg-[#1A1A1A] border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+                  className="ml-2"
                 >
                   {isLoading ? (
                     <>
@@ -766,7 +685,7 @@ export default function SettingsPage() {
                   size="sm"
                   onClick={handleListEvents}
                   disabled={isLoading}
-                  className="ml-2 bg-[#1A1A1A] border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+                  className="ml-2"
                 >
                   {isLoading ? (
                     <>
@@ -780,16 +699,16 @@ export default function SettingsPage() {
                     </>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleDisconnect} className="ml-2 bg-[#1A1A1A] border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white">
+                <Button variant="outline" size="sm" onClick={handleDisconnect} className="ml-2">
                   Disconnect
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto" data-settings-buttons="true">
+              <div className="flex flex-col items-end gap-2">
                 <Button
                   onClick={handleConnectGoogle}
                   disabled={isLoading}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white w-full sm:w-auto border-0"
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
                 >
                   {isLoading ? (
                     <>
@@ -800,16 +719,16 @@ export default function SettingsPage() {
                     'Connect Google Calendar'
                   )}
                 </Button>
-                <p className="text-xs text-gray-400 text-right max-w-xs">
+                <p className="text-xs text-gray-500 text-right max-w-xs">
                   Add this to Google OAuth redirect URIs:<br />
-                  <code className="bg-[#0F0F0F] border border-gray-700 px-1 rounded text-[10px] break-all text-gray-300">{redirectUri || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001') + '/api/auth/google/callback'}</code>
+                  <code className="bg-gray-100 px-1 rounded text-[10px] break-all">{redirectUri || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001') + '/api/auth/google/callback'}</code>
                 </p>
               </div>
             )}
           </div>
 
           {connectionError && (
-            <Alert variant="destructive" className="mb-4 border-red-500/20 bg-red-500/10">
+            <Alert variant="destructive" className="mb-4 border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>{connectionError.title}</AlertTitle>
               <AlertDescription className="mt-2 flex flex-col gap-2">
@@ -819,7 +738,7 @@ export default function SettingsPage() {
                     href={connectionError.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-medium underline hover:text-red-400 w-fit text-red-400"
+                    className="inline-flex items-center gap-1 font-medium underline hover:text-red-800 w-fit"
                   >
                     Enable Calendar API <ExternalLink className="h-3 w-3" />
                   </a>
@@ -830,7 +749,7 @@ export default function SettingsPage() {
 
           {isConnected && (
             <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-400 mb-4">
+              <p className="text-sm text-gray-600 mb-4">
                 Your calendar is connected. Tasks will be automatically scheduled based on your availability.
               </p>
             </div>
@@ -839,20 +758,19 @@ export default function SettingsPage() {
         </div>
 
         {/* Working Hours Settings */}
-        <div className="bg-[#1A1A1A] rounded-md border border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Working Hours</h2>
-          <p className="text-sm text-gray-400 mb-4">
+        <div className="bg-white rounded-md shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Working Hours</h2>
+          <p className="text-sm text-gray-500 mb-4">
             Tasks will only be scheduled during these hours. Default: 9:00 AM - 6:00 PM
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="start-time" className="mb-2 text-gray-300">Start Time</Label>
+              <Label htmlFor="start-time" className="mb-2">Start Time</Label>
               <Input
                 id="start-time"
                 type="time"
                 value={workingHoursStart}
-                className="bg-[#0F0F0F] border-gray-700 text-white focus:border-emerald-500"
                 onChange={(e) => {
                   const value = e.target.value;
                   setWorkingHoursStart(value);
@@ -863,12 +781,11 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="end-time" className="mb-2 text-gray-300">End Time</Label>
+              <Label htmlFor="end-time" className="mb-2">End Time</Label>
               <Input
                 id="end-time"
                 type="time"
                 value={workingHoursEnd}
-                className="bg-[#0F0F0F] border-gray-700 text-white focus:border-emerald-500"
                 onChange={(e) => {
                   const value = e.target.value;
                   setWorkingHoursEnd(value);
@@ -879,7 +796,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <Label htmlFor="user-timezone" className="text-gray-300">Timezone</Label>
+              <Label htmlFor="user-timezone">Timezone</Label>
               <select
                 id="user-timezone"
                 value={userTimezone}
@@ -888,7 +805,7 @@ export default function SettingsPage() {
                   localStorage.setItem('user_timezone', e.target.value);
                   toast.success(`Timezone set to ${e.target.value}`);
                 }}
-                className="mt-1 w-full px-3 py-2 bg-[#0F0F0F] border border-gray-700 text-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               >
                 <option value="America/New_York">Eastern Time (America/New_York)</option>
                 <option value="America/Chicago">Central Time (America/Chicago)</option>
@@ -910,22 +827,22 @@ export default function SettingsPage() {
         </div>
 
         {/* Keyboard Shortcut Settings */}
-        <div className="bg-[#1A1A1A] rounded-md border border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white rounded-md shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <Keyboard className="w-6 h-6 text-gray-400" />
+            <Keyboard className="w-6 h-6 text-gray-500" />
             <div>
-              <h2 className="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
-              <p className="text-sm text-gray-400">Configure quick actions</p>
+              <h2 className="text-lg font-semibold text-gray-900">Keyboard Shortcuts</h2>
+              <p className="text-sm text-gray-500">Configure quick actions</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="create-task-shortcut" className="mb-2 block text-gray-300">
+              <Label htmlFor="create-task-shortcut" className="mb-2 block">
                 Create Task Shortcut
               </Label>
-              <p className="text-sm text-gray-400 mb-3">
-                Press this key to quickly open the create task dialog. Default: <kbd className="px-2 py-1 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">N</kbd>
+              <p className="text-sm text-gray-500 mb-3">
+                Press this key to quickly open the create task dialog. Default: <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">N</kbd>
               </p>
               <div className="flex items-center gap-3">
                 <Input
@@ -961,16 +878,16 @@ export default function SettingsPage() {
                     }
                   }}
                   placeholder="n"
-                  className="w-20 font-mono text-center text-lg bg-[#0F0F0F] border-gray-700 text-white focus:border-emerald-500"
+                  className="w-20 font-mono text-center text-lg"
                   maxLength={1}
                 />
                 <div className="text-sm text-gray-500">
                   <p>Press any letter or number to set</p>
-                  <p className="text-xs mt-1 text-gray-400">Current: <kbd className="px-2 py-1 bg-[#0F0F0F] border border-gray-700 rounded font-mono text-gray-300">{createTaskShortcut.toUpperCase()}</kbd></p>
+                  <p className="text-xs mt-1">Current: <kbd className="px-2 py-1 bg-gray-100 rounded font-mono">{createTaskShortcut.toUpperCase()}</kbd></p>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                💡 Tip: Use <kbd className="px-1.5 py-0.5 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">K</kbd> or <kbd className="px-1.5 py-0.5 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">Cmd</kbd> + <kbd className="px-1.5 py-0.5 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">K</kbd> for common shortcuts, or a single letter like <kbd className="px-1.5 py-0.5 bg-[#0F0F0F] border border-gray-700 rounded text-xs font-mono text-gray-300">N</kbd>
+              <p className="text-xs text-gray-400 mt-2">
+                💡 Tip: Use <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">K</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">Cmd</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">K</kbd> for common shortcuts, or a single letter like <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">N</kbd>
               </p>
             </div>
           </div>

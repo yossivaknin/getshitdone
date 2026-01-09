@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Board } from "@/components/kanban/Board";
 import { Insights } from "@/components/dashboard/Insights";
 import Link from 'next/link';
-import { Settings, LogOut, Plus, Zap, Clock, User } from 'lucide-react';
+import { Settings, LogOut, Plus, Zap, Clock, User, BarChart3, X } from 'lucide-react';
 import { getAllTagsWithColors, getTagNames } from '@/lib/tags';
 import { logout, getTasks } from '@/app/actions';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 // Kanban columns - tasks are automatically categorized by due date in the Board component
 const kanbanColumns = [
   { id: 'queue', title: 'Queue' },
-  { id: 'today', title: 'Focus' },
+  { id: 'today', title: 'Today' },
   { id: 'this-week', title: 'This Week' }
 ];
 
@@ -23,40 +23,93 @@ export default function UnifiedViewPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const [selectedTab, setSelectedTab] = useState<'all' | 'work' | 'personal'>('all');
+  const [selectedTab, setSelectedTab] = useState<string>('all');
   const [managedTags, setManagedTags] = useState<{ name: string; color: string }[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // Automatically refresh Google Calendar token in the background
+  // Initialize token refresh
   useTokenRefresh();
 
   // Check for Google token from Supabase OAuth on mount
   useEffect(() => {
-    // Check URL params for Google token from Supabase OAuth
-    const urlParams = new URLSearchParams(window.location.search);
-    const googleToken = urlParams.get('google_token');
-    const googleRefresh = urlParams.get('google_refresh');
-    const fromSupabase = urlParams.get('from_supabase');
-
-    if (fromSupabase === 'true' && googleToken) {
-      console.log('[App] Extracting Google token from Supabase OAuth session');
+    try {
+      if (typeof window === 'undefined') return;
       
-      // Validate token format
-      if (!googleToken.startsWith('1//')) {
-        // It's an access token, save it
-        localStorage.setItem('google_calendar_token', googleToken);
-        console.log('[App] ✅ Google Calendar access token saved from Supabase session');
+      // Check URL params for Google token from Supabase OAuth
+      const urlParams = new URLSearchParams(window.location.search);
+      const googleToken = urlParams.get('google_token');
+      const googleRefresh = urlParams.get('google_refresh');
+      const fromSupabase = urlParams.get('from_supabase');
+
+      if (fromSupabase === 'true' && googleToken) {
+        console.log('[App] Extracting Google token from Supabase OAuth session');
         
-        if (googleRefresh) {
-          localStorage.setItem('google_calendar_refresh_token', googleRefresh);
-          console.log('[App] ✅ Google Calendar refresh token saved from Supabase session');
+        try {
+          // Validate token format
+          if (!googleToken.startsWith('1//')) {
+            // It's an access token, save it locally
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('google_calendar_token', googleToken);
+              console.log('[App] ✅ Google Calendar access token saved from Supabase session');
+
+              if (googleRefresh) {
+                localStorage.setItem('google_calendar_refresh_token', googleRefresh);
+                console.log('[App] ✅ Google Calendar refresh token saved from Supabase session');
+              }
+            }
+
+            // Attempt to persist tokens to database (server-side)
+            try {
+              fetch('/api/save-google-tokens', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ google_token: googleToken, google_refresh: googleRefresh })
+              }).then(async (res) => {
+                try {
+                  const data = await res.json()
+                  if (res.ok && data.success) {
+                    console.log('[App] ✅ Tokens persisted to database')
+                  } else {
+                    console.warn('[App] Could not persist tokens to DB (will fallback to localStorage)', data)
+                  }
+                } catch (e) {
+                  console.warn('[App] Save tokens response parse error', e)
+                }
+              }).catch(err => {
+                console.warn('[App] Save tokens request failed (will rely on localStorage):', err)
+              })
+            } catch (err) {
+              console.warn('[App] Error while calling save tokens endpoint:', err)
+            }
+
+            // Clean URL
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, '', '/app');
+            }
+
+            toast.success('Google Calendar connected! You can now schedule tasks.');
+          }
+        } catch (error: any) {
+          console.error('[App] Error saving Google token:', {
+            error: error,
+            errorType: typeof error,
+            errorString: String(error),
+            errorStack: error?.stack,
+            errorMessage: error?.message,
+          });
         }
-        
-        // Clean URL
-        window.history.replaceState({}, '', '/app');
-        
-        toast.success('Google Calendar connected! You can now schedule tasks.');
       }
+    } catch (error: any) {
+      console.error('[App] Error in Google token check useEffect:', {
+        error: error,
+        errorType: typeof error,
+        errorString: String(error),
+        errorStack: error?.stack,
+        errorMessage: error?.message,
+      });
     }
   }, []);
 
@@ -79,36 +132,57 @@ export default function UnifiedViewPage() {
           setTasks(tasksResult.tasks || []);
         }
         
-        // Load tags (with caching)
-        const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
-        const cachedTags = getCachedTags();
+        // Load tags from database (always fetch fresh, cache is just for fallback)
+        // getUserTags is already available from Promise.all above
+        const { tags: dbTags, error } = await getUserTags();
         
-        if (cachedTags) {
-          console.log('[App] Using cached tags:', cachedTags.length);
-          setManagedTags(cachedTags);
-        } else {
-          const { tags: dbTags, error } = await getUserTags();
+        if (error || !dbTags || dbTags.length === 0) {
+          // Fallback to cache, then localStorage
+          const { getCachedTags, setCachedTags } = await import('@/lib/tags-cache');
+          const cachedTags = getCachedTags();
           
-          if (error || !dbTags || dbTags.length === 0) {
-            // Fallback to localStorage
+          if (cachedTags && cachedTags.length > 0) {
+            console.log('[App] Database fetch failed, using cached tags:', cachedTags.length);
+            setManagedTags(cachedTags);
+          } else {
+            // Final fallback to localStorage
             const { getAllTagsWithColors } = await import('@/lib/tags');
             const fallbackTags = getAllTagsWithColors();
             setManagedTags(fallbackTags);
             setCachedTags(fallbackTags);
-          } else {
-            // Convert database tags to the format expected by the UI
-            const formattedTags = dbTags.map((t: any) => ({
-              name: t.name,
-              color: t.color || 'bg-gray-50 text-gray-600 border-gray-200'
-            }));
-            setManagedTags(formattedTags);
-            setCachedTags(formattedTags);
-            console.log('[App] Loaded and cached', formattedTags.length, 'tags from database');
           }
+        } else {
+          // Convert database tags to the format expected by the UI
+          const formattedTags = dbTags.map((t: any) => ({
+            name: t.name,
+            color: t.color || 'bg-gray-50 text-gray-600 border-gray-200'
+          }));
+          setManagedTags(formattedTags);
+          
+          // Update cache with fresh data
+          const { setCachedTags } = await import('@/lib/tags-cache');
+          setCachedTags(formattedTags);
+          console.log('[App] Loaded and cached', formattedTags.length, 'tags from database');
         }
-      } catch (error) {
-        console.error('Error loading data:', error);
-        toast.error('Failed to load data');
+      } catch (error: any) {
+        console.error('[App] ❌❌❌ CRITICAL ERROR loading data:', {
+          error: error,
+          errorType: typeof error,
+          errorString: String(error),
+          errorStack: error?.stack,
+          errorMessage: error?.message,
+          errorName: error?.name,
+          errorJSON: (() => {
+            try {
+              return JSON.stringify(error, Object.getOwnPropertyNames(error));
+            } catch {
+              return 'Could not stringify error';
+            }
+          })(),
+        });
+        setHasError(true);
+        setErrorMessage(error?.message || String(error) || 'Unknown error');
+        toast.error('Failed to load data: ' + (error?.message || String(error)));
       } finally {
         setIsLoading(false);
       }
@@ -137,8 +211,14 @@ export default function UnifiedViewPage() {
         });
         setTasks(result.tasks || []);
       }
-    } catch (error) {
-      console.error('[App] Exception refreshing tasks:', error);
+    } catch (error: any) {
+      console.error('[App] Exception refreshing tasks:', {
+        error: error,
+        errorType: typeof error,
+        errorString: String(error),
+        errorStack: error?.stack,
+        errorMessage: error?.message,
+      });
       toast.error('Failed to refresh tasks');
     }
   };
@@ -170,16 +250,24 @@ export default function UnifiedViewPage() {
           const { setCachedTags } = await import('@/lib/tags-cache');
           setCachedTags(formattedTags);
         }
-      } catch (error) {
-        console.error('[App] Error refreshing tags:', error);
+      } catch (error: any) {
+        console.error('[App] Error refreshing tags:', {
+          error: error,
+          errorType: typeof error,
+          errorString: String(error),
+          errorStack: error?.stack,
+          errorMessage: error?.message,
+        });
       }
     };
     
-    window.addEventListener('tagsUpdated', handleTagUpdate);
-    
-    return () => {
-      window.removeEventListener('tagsUpdated', handleTagUpdate);
-    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('tagsUpdated', handleTagUpdate);
+      
+      return () => {
+        window.removeEventListener('tagsUpdated', handleTagUpdate);
+      };
+    }
   }, []);
 
   // Use managed tags instead of extracting from tasks
@@ -194,36 +282,56 @@ export default function UnifiedViewPage() {
 
   // Keyboard shortcut for creating tasks
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input, textarea, or contenteditable
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
+      try {
+        // Don't trigger if user is typing in an input, textarea, or contenteditable
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
 
-      // Get shortcut from localStorage (default: 'n')
-      const shortcut = (localStorage.getItem('create_task_shortcut') || 'n').toLowerCase();
-      const key = e.key.toLowerCase();
+        // Get shortcut from localStorage (default: 'n')
+        let shortcut = 'n';
+        try {
+          if (typeof localStorage !== 'undefined') {
+            shortcut = (localStorage.getItem('create_task_shortcut') || 'n').toLowerCase();
+          }
+        } catch (error) {
+          console.warn('[App] Error reading localStorage for shortcut:', error);
+        }
+        
+        const key = e.key.toLowerCase();
 
-      // Check if the pressed key matches the shortcut
-      // Support both single key (e.g., 'n') and modifier combinations (e.g., 'ctrl+k', 'cmd+k')
-      if (key === shortcut) {
-        // For single letter shortcuts, check if no modifier is pressed (or just shift)
-        if (shortcut.length === 1 && /^[a-z0-9]$/.test(shortcut)) {
-          // Allow Shift for capital letters, but ignore other modifiers
-          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-            e.preventDefault();
-            setCreateDialogOpen(true);
-            console.log('[Keyboard] Create task dialog opened via shortcut:', shortcut);
+        // Check if the pressed key matches the shortcut
+        // Support both single key (e.g., 'n') and modifier combinations (e.g., 'ctrl+k', 'cmd+k')
+        if (key === shortcut) {
+          // For single letter shortcuts, check if no modifier is pressed (or just shift)
+          if (shortcut.length === 1 && /^[a-z0-9]$/.test(shortcut)) {
+            // Allow Shift for capital letters, but ignore other modifiers
+            if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+              e.preventDefault();
+              setCreateDialogOpen(true);
+              console.log('[Keyboard] Create task dialog opened via shortcut:', shortcut);
+            }
           }
         }
-      }
-      
-      // Also support common shortcuts like Ctrl+K / Cmd+K if shortcut is 'k'
-      if (shortcut === 'k' && (e.ctrlKey || e.metaKey) && key === 'k') {
-        e.preventDefault();
-        setCreateDialogOpen(true);
-        console.log('[Keyboard] Create task dialog opened via Ctrl/Cmd+K');
+        
+        // Also support common shortcuts like Ctrl+K / Cmd+K if shortcut is 'k'
+        if (shortcut === 'k' && (e.ctrlKey || e.metaKey) && key === 'k') {
+          e.preventDefault();
+          setCreateDialogOpen(true);
+          console.log('[Keyboard] Create task dialog opened via Ctrl/Cmd+K');
+        }
+      } catch (error: any) {
+        console.error('[App] Error in keyboard handler:', {
+          error: error,
+          errorType: typeof error,
+          errorString: String(error),
+          errorStack: error?.stack,
+          errorMessage: error?.message,
+        });
       }
     };
 
@@ -237,38 +345,66 @@ export default function UnifiedViewPage() {
   const filteredTasks = useMemo(() => {
     if (selectedTab === 'all') return tasks;
     return tasks.filter((task: any) => {
+      if (selectedTab === 'all') {
+        return true;
+      }
       const tags = task.tags || [];
       const tagNames = tags.map((t: any) => (typeof t === 'string' ? t : t.name)).map((n: string) => n.toLowerCase());
-      if (selectedTab === 'work') {
-        return tagNames.includes('work');
-      }
-      if (selectedTab === 'personal') {
-        return tagNames.includes('personal');
-      }
-      return true;
+      return tagNames.includes(selectedTab.toLowerCase());
     });
   }, [tasks, selectedTab]);
+
+  // Show error state if there's a critical error
+  if (hasError) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0F0F0F] text-white p-4">
+        <div className="max-w-md w-full bg-[#1A1A1A] border border-red-500/20 rounded-lg p-6">
+          <h2 className="text-2xl font-bold text-red-400 mb-4">Application Error</h2>
+          <p className="text-slate-300 mb-4">{errorMessage}</p>
+          <button
+            onClick={() => {
+              setHasError(false);
+              setErrorMessage('');
+              window.location.reload();
+            }}
+            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded transition-colors"
+          >
+            Reload App
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-[#0F0F0F]">
       {/* Top Header Bar */}
-      <header className="px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800">
+      <header className="px-4 sm:px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800 safe-top" style={{ paddingTop: `calc(0.75rem + env(safe-area-inset-top))` }}>
         <div className="text-gray-400 text-sm font-mono">SITREP</div>
-        <div className="flex items-center gap-4">
-          <button className="text-gray-400 hover:text-white transition-colors">
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Mobile Insights Toggle */}
+          <button 
+            onClick={() => setIsInsightsOpen(true)}
+            className="lg:hidden text-gray-400 hover:text-white transition-colors p-2"
+            title="Insights"
+          >
+            <BarChart3 className="w-5 h-5" />
+          </button>
+          <button className="hidden sm:block text-gray-400 hover:text-white transition-colors">
             <Zap className="w-5 h-5" />
           </button>
-          <button className="text-gray-400 hover:text-white transition-colors">
+          <button className="hidden sm:block text-gray-400 hover:text-white transition-colors">
             <Clock className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setCreateDialogOpen(true)}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors p-2"
+            title="New Task"
           >
             <Plus className="w-5 h-5" />
           </button>
           <Link href="/settings">
-            <button className="text-gray-400 hover:text-white transition-colors">
+            <button className="text-gray-400 hover:text-white transition-colors p-2" title="Settings">
               <User className="w-5 h-5" />
             </button>
           </Link>
@@ -276,11 +412,11 @@ export default function UnifiedViewPage() {
       </header>
 
       {/* Navigation Tabs */}
-      <div className="px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800">
-        <div className="flex items-center gap-6">
+      <div className="px-4 sm:px-6 py-3 flex items-center justify-between bg-[#1A1A1A] border-b border-gray-800 gap-3">
+        <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto flex-1 scrollbar-hide">
           <button
             onClick={() => setSelectedTab('all')}
-            className={`text-sm font-medium transition-colors ${
+            className={`text-sm font-medium transition-colors whitespace-nowrap ${
               selectedTab === 'all'
                 ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
                 : 'text-gray-400 hover:text-white'
@@ -288,32 +424,26 @@ export default function UnifiedViewPage() {
           >
             All tasks
           </button>
-          <button
-            onClick={() => setSelectedTab('work')}
-            className={`text-sm font-medium transition-colors ${
-              selectedTab === 'work'
-                ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Work
-          </button>
-          <button
-            onClick={() => setSelectedTab('personal')}
-            className={`text-sm font-medium transition-colors ${
-              selectedTab === 'personal'
-                ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Personal
-          </button>
+          {managedTags.slice(0, 5).map((tag) => (
+            <button
+              key={tag.name}
+              onClick={() => setSelectedTab(tag.name)}
+              className={`text-sm font-medium transition-colors capitalize whitespace-nowrap ${
+                selectedTab === tag.name
+                  ? 'text-emerald-500 border-b-2 border-emerald-500 pb-1'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {tag.name}
+            </button>
+          ))}
         </div>
         <button
           onClick={() => setCreateDialogOpen(true)}
-          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors"
+          className="px-3 sm:px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
         >
-          + New Task
+          <span className="hidden sm:inline">+ New Task</span>
+          <span className="sm:hidden">+ New</span>
         </button>
       </div>
       
@@ -342,11 +472,39 @@ export default function UnifiedViewPage() {
           )}
         </main>
 
-        {/* Right Sidebar - Insights */}
+        {/* Right Sidebar - Insights (Desktop) */}
         <div className="hidden lg:block w-80 flex-shrink-0 border-l border-gray-800">
           <Insights tasks={tasks} />
         </div>
       </div>
+
+      {/* Mobile Insights Drawer */}
+      {isInsightsOpen && (
+        <>
+          {/* Overlay */}
+          <div 
+            className="lg:hidden fixed inset-0 bg-black/60 z-40"
+            onClick={() => setIsInsightsOpen(false)}
+          />
+          {/* Drawer */}
+          <div className="lg:hidden fixed inset-y-0 right-0 w-[85vw] max-w-sm bg-[#1A1A1A] z-50 shadow-2xl flex flex-col safe-top safe-bottom" style={{ paddingTop: `env(safe-area-inset-top)`, paddingBottom: `env(safe-area-inset-bottom)` }}>
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-800">
+              <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Insights</h2>
+              <button
+                onClick={() => setIsInsightsOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors p-2"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Drawer Content */}
+            <div className="flex-1 overflow-y-auto">
+              <Insights tasks={tasks} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

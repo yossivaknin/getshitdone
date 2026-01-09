@@ -21,6 +21,58 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // CORS headers for Capacitor (iOS: capacitor://localhost, Android: http://localhost)
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*', // Allow all origins for Capacitor compatibility
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, X-Requested-With',
+          },
+          {
+            key: 'Access-Control-Allow-Credentials',
+            value: 'true',
+          },
+        ],
+      },
+      {
+        // Prevent caching of dynamic routes (prevents 304 errors with stale content)
+        source: '/',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+        ],
+      },
+      {
+        // Prevent caching of app routes
+        source: '/app/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+        ],
+      },
+      {
+        // Prevent caching of login/auth routes
+        source: '/(login|auth)/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+        ],
+      },
+      {
         source: '/sw.js',
         headers: [
           {

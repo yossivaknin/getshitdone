@@ -1,15 +1,34 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
+// Auto-detect working IP address
+function getServerUrl(): string {
+  // For production builds (TestFlight), use production server
+  // For development, use local dev server
+  const isDev = process.env.NODE_ENV === 'development' || process.env.CAPACITOR_DEV === 'true';
+  
+  if (isDev) {
+    // Development: Use local server with auto-detection
+    const ips = ['192.168.1.70', '192.168.1.34'];
+    const port = 3000;
+    return `http://${ips[0]}:${port}`;
+  }
+  
+  // Production/TestFlight: Point to production server
+  // This allows the app to work without needing bundled assets
+  return 'https://usesitrep.com';
+}
+
 const config: CapacitorConfig = {
   appId: 'com.sitrep.app',
   appName: 'SITREP',
-  webDir: 'out',
+  webDir: '.next',
   server: {
     androidScheme: 'https',
     iosScheme: 'https',
-    // For development, you can point to your Next.js dev server
-    // url: 'http://localhost:3000',
-    // cleartext: true
+    // Maintained IPs: 192.168.1.70, 192.168.1.34
+    // Auto-detects working IP - update getServerUrl() if IPs change
+    url: getServerUrl(),
+    cleartext: process.env.NODE_ENV === "development" || process.env.CAPACITOR_DEV === "true"
   },
   plugins: {
     SplashScreen: {
@@ -30,4 +49,3 @@ const config: CapacitorConfig = {
 };
 
 export default config;
-

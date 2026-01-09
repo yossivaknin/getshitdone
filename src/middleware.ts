@@ -3,128 +3,114 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   try {
-    // Check if environment variables are set
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Missing Supabase environment variables')
-      // Allow access to login page if env vars are missing
-      if (request.nextUrl.pathname.startsWith('/login')) {
-        return NextResponse.next()
-      }
-      // Redirect to login for other pages
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+    // Skip middleware for static assets and API routes during SSR
+    const { pathname } = request.nextUrl
+    if (pathname.startsWith('/_next') || pathname.startsWith('/api')) {
+      return NextResponse.next()
     }
 
-    let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
+    // Check if Supabase env vars are available
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      // If no Supabase config, allow all routes (development mode)
+      if (pathname === '/') {
+        const loginRedirect = NextResponse.redirect(new URL('/login', request.url));
+      loginRedirect.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      return loginRedirect
+      }
+      return NextResponse.next()
+    }
 
+    // Create Supabase client for server-side auth check
     const supabase = createServerClient(
-      supabaseUrl,
-      supabaseAnonKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         cookies: {
           getAll() {
             return request.cookies.getAll()
           },
           setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
+            cookiesToSet.forEach(({ name, value }) => {
               request.cookies.set(name, value)
-              // Extend session cookies to 1 year (until user signs out)
-              // This applies to auth session cookies (sb-*-auth-token)
-              if (name.includes('auth-token')) {
-                response.cookies.set(name, value, {
-                  ...options,
-                  maxAge: 60 * 60 * 24 * 365, // 1 year in seconds
-                  sameSite: 'lax',
-                  secure: process.env.NODE_ENV === 'production',
-                  httpOnly: true,
-                })
-              } else {
-                response.cookies.set(name, value, options)
-              }
             })
           },
         },
       }
     )
 
-    // Allow access to landing page, login page, auth callback, API routes, and debug pages
-    if (request.nextUrl.pathname === '/' ||
-        request.nextUrl.pathname.startsWith('/login') || 
-        request.nextUrl.pathname.startsWith('/auth/callback') ||
-        request.nextUrl.pathname.startsWith('/api/') ||
-        request.nextUrl.pathname.startsWith('/debug-slots') ||
-        request.nextUrl.pathname.startsWith('/test-oauth')) {
-      return response
+    // Get the current session (with timeout to prevent hanging)
+    let session = null
+    try {
+      const { data } = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 2000)
+        )
+      ]) as any
+      session = data?.session
+    } catch (err) {
+      // If session check fails, fail open (allow request)
+      console.error('[Middleware] Session check failed:', err)
     }
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
+    // Public routes that don't require authentication
+    const publicRoutes = ['/login', '/auth/callback']
+    const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
-    // If there's an error getting the user, allow access to login
-    if (error) {
-      console.error('Middleware auth error:', error.message)
-      if (request.nextUrl.pathname.startsWith('/login')) {
-        return response
+    // Redirect root to login or app based on auth status
+    if (pathname === '/') {
+      const url = request.nextUrl.clone()
+      url.pathname = session ? '/app' : '/login'
+      const redirectResponse = NextResponse.redirect(url);
+      redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      return redirectResponse
+    }
+
+    // If accessing a protected route without session, redirect to login
+    if (!isPublicRoute && !session) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      if (pathname !== '/login') {
+        url.searchParams.set('redirect', pathname)
       }
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url);
+      redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      return redirectResponse
     }
 
-    // Redirect to login if not authenticated
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+    // If accessing login page while already authenticated, redirect to app
+    if (pathname === '/login' && session) {
+      const appRedirect = NextResponse.redirect(new URL('/app', request.url));
+      appRedirect.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      return appRedirect
     }
 
-    // Redirect authenticated users from login to app
-    if (user && request.nextUrl.pathname.startsWith('/login')) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/app'
-      return NextResponse.redirect(url)
-    }
-    
-    // Redirect authenticated users from root to app
-    if (user && request.nextUrl.pathname === '/') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/app'
-      return NextResponse.redirect(url)
-    }
-
+    // Allow the request to proceed
+    const response = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    })
+    // Prevent caching of middleware responses
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     return response
   } catch (error) {
-    console.error('Middleware error:', error)
-    // On error, allow access to login page
-    if (request.nextUrl.pathname.startsWith('/login')) {
-      return NextResponse.next()
-    }
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+    // Fail open - if middleware crashes, allow the request
+    // This prevents blocking the app if there's any issue
+    console.error('[Middleware] Error:', error)
+    const response = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    })
+    // Prevent caching even on errors
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    return response
   }
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - sw.js (service worker)
-     * - manifest.json (PWA manifest)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json).*)',
   ],
 }

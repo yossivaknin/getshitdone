@@ -968,3 +968,123 @@ export async function scheduleTask(
     }
   }
 }
+
+
+/**
+ * Save Google Calendar tokens to database
+ * This allows tokens to be shared between web and mobile
+ */
+export async function saveGoogleCalendarTokens(accessToken: string, refreshToken?: string, expiresIn?: number) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      console.error('[SAVE TOKENS] No user found')
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    // Calculate expiration time if expiresIn is provided (in seconds)
+    const expiresAt = expiresIn 
+      ? new Date(Date.now() + expiresIn * 1000).toISOString()
+      : null
+
+    const { data, error } = await supabase
+      .from('user_tokens')
+      .upsert({
+        user_id: user.id,
+        google_access_token: accessToken,
+        google_refresh_token: refreshToken || null,
+        token_expires_at: expiresAt,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+      .select()
+
+    if (error) {
+      console.error('[SAVE TOKENS] Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    console.log('[SAVE TOKENS] ✅ Tokens saved to database for user:', user.id)
+    return { success: true, data }
+  } catch (error: any) {
+    console.error('[SAVE TOKENS] Exception:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Get Google Calendar tokens from database
+ * Falls back to localStorage if not found in database
+ */
+export async function getGoogleCalendarTokens() {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      console.log('[GET TOKENS] ⚠️ No user found (not authenticated), checking localStorage')
+      // Fallback to localStorage
+      if (typeof window !== 'undefined') {
+        const accessToken = localStorage.getItem('google_calendar_token')
+        const refreshToken = localStorage.getItem('google_calendar_refresh_token')
+        console.log('[GET TOKENS] localStorage check:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken })
+        return {
+          accessToken,
+          refreshToken,
+          source: 'localStorage'
+        }
+      }
+      console.log('[GET TOKENS] ⚠️ No user and no window, returning null')
+      return { accessToken: null, refreshToken: null, source: null }
+    }
+
+    const { data, error } = await supabase
+      .from('user_tokens')
+      .select('google_access_token, google_refresh_token, token_expires_at')
+      .eq('user_id', user.id)
+      .single()
+
+    if (error) {
+      console.log('[GET TOKENS] Database query error:', error.message, error.code)
+    }
+    
+    if (error || !data) {
+      console.log('[GET TOKENS] Not found in database (error or no data), checking localStorage')
+      // Fallback to localStorage
+      if (typeof window !== 'undefined') {
+        const accessToken = localStorage.getItem('google_calendar_token')
+        const refreshToken = localStorage.getItem('google_calendar_refresh_token')
+        return {
+          accessToken,
+          refreshToken,
+          source: 'localStorage'
+        }
+      }
+      return { accessToken: null, refreshToken: null, source: null }
+    }
+
+    console.log('[GET TOKENS] ✅ Tokens found in database')
+    return {
+      accessToken: data.google_access_token,
+      refreshToken: data.google_refresh_token,
+      expiresAt: data.token_expires_at,
+      source: 'database'
+    }
+  } catch (error: any) {
+    console.error('[GET TOKENS] Exception:', error)
+    // Fallback to localStorage
+    if (typeof window !== 'undefined') {
+      const accessToken = localStorage.getItem('google_calendar_token')
+      const refreshToken = localStorage.getItem('google_calendar_refresh_token')
+      return {
+        accessToken,
+        refreshToken,
+        source: 'localStorage'
+      }
+    }
+    return { accessToken: null, refreshToken: null, source: null }
+  }
+}

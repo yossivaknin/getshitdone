@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
     // Validate required parameters
     if (!code || code.trim() === '') {
       console.error('[OAuth Callback] ❌ Authorization code is missing or empty');
+      // TODO: Ensure this redirect checks isCapacitorJson
       if (isCapacitorJson) {
         return NextResponse.json({ success: false, error: 'missing_code' }, { status: 400 });
       }
@@ -102,12 +103,7 @@ export async function GET(request: NextRequest) {
     
     if (!clientId || !clientSecret) {
       console.error('[OAuth Callback] ❌ Client ID or Secret is missing');
-      if (isCapacitorJson) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'missing_credentials' 
-        }, { status: 400 });
-      }
+      // TODO: Ensure this redirect checks isCapacitorJson
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
       return NextResponse.redirect(
         new URL('/settings?error=missing_credentials', baseUrl)
@@ -116,15 +112,29 @@ export async function GET(request: NextRequest) {
     
     if (!redirectUri) {
       console.error('[OAuth Callback] ❌ Redirect URI is missing');
-      if (isCapacitorJson) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'missing_redirect_uri' 
-        }, { status: 400 });
-      }
+      // TODO: Ensure this redirect checks isCapacitorJson
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
       return NextResponse.redirect(
         new URL('/settings?error=missing_redirect_uri', baseUrl)
+      );
+
+    // Validate required OAuth credentials
+    if (!clientId || !clientSecret) {
+      console.error('[OAuth Callback] Missing OAuth credentials:', {
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret,
+      });
+      const isCapacitorJson = request.nextUrl.searchParams.get('format') === 'json' || 
+                              request.nextUrl.searchParams.get('capacitor') === 'true';
+      if (isCapacitorJson) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'oauth_config_error'
+        }, { status: 500 });
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+      return NextResponse.redirect(
+        new URL('/settings?error=oauth_config_error', baseUrl)
       );
     }
 
@@ -173,13 +183,8 @@ export async function GET(request: NextRequest) {
     if (!tokens.access_token) {
       console.error('[OAuth Callback] ❌ No access_token in response!');
       console.error('[OAuth Callback] Response:', JSON.stringify(tokens, null, 2));
-      if (isCapacitorJson) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'no_access_token' 
-        }, { status: 400 });
-      }
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+      // TODO: Ensure this redirect checks isCapacitorJson
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
       return NextResponse.redirect(
         new URL('/settings?error=no_access_token', baseUrl)
       );
@@ -292,7 +297,7 @@ export async function GET(request: NextRequest) {
               .button:hover {
                 background: #059669;
                 transform: translateY(-2px);
-                box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+                box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
               }
               .button:active {
                 transform: translateY(0);
@@ -399,9 +404,12 @@ export async function GET(request: NextRequest) {
     
     console.log('[OAuth Callback] Redirecting to settings with tokens');
     
+    // TODO: Ensure this redirect checks isCapacitorJson
     return NextResponse.redirect(redirectUrl);
-  } catch (error) {
+  }
+  catch (error) {
     console.error('OAuth callback error:', error);
+    // TODO: Ensure this redirect checks isCapacitorJson
     const isCapacitorJson = request.nextUrl.searchParams.get('format') === 'json' || 
                             request.nextUrl.searchParams.get('capacitor') === 'true';
     if (isCapacitorJson) {
@@ -415,4 +423,6 @@ export async function GET(request: NextRequest) {
       new URL('/settings?error=oauth_failed', baseUrl)
     );
   }
+}
+
 }

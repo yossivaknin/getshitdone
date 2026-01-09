@@ -163,18 +163,10 @@ async function handleBriefing(request: Request) {
         const timeMin = now.toISOString();
         
         // Calculate end of week (Sunday at 23:59:59)
-        // If today is Sunday, end of week is today. Otherwise, go to the upcoming Sunday.
         const endOfWeek = new Date(now);
-        const currentDay = endOfWeek.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-        if (currentDay === 0) {
-          // Today is Sunday - end of week is today (end of day)
-          endOfWeek.setHours(23, 59, 59, 999);
-        } else {
-          // Calculate days until next Sunday
-          const daysUntilSunday = 7 - currentDay;
-          endOfWeek.setDate(endOfWeek.getDate() + daysUntilSunday);
-          endOfWeek.setHours(23, 59, 59, 999);
-        }
+        const daysUntilSunday = 7 - endOfWeek.getDay(); // 0 = Sunday, so if today is Sunday, daysUntilSunday = 0
+        endOfWeek.setDate(endOfWeek.getDate() + daysUntilSunday);
+        endOfWeek.setHours(23, 59, 59, 999);
         const timeMax = endOfWeek.toISOString();
         
         const calendarResponse = await fetch(
@@ -283,15 +275,7 @@ async function handleBriefing(request: Request) {
 
     // Format calendar events by day for better context
     let calendarText = '';
-    const allDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      // Sort days chronologically from TODAY to end of week (Sunday)
-      const todayIndex = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-      // Get days from today to Sunday (end of week)
-      const dayOrder = [];
-      for (let i = 0; i <= (todayIndex === 0 ? 0 : 7 - todayIndex); i++) {
-        const dayIndex = (todayIndex + i) % 7;
-        dayOrder.push(allDays[dayIndex]);
-      }
+    const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     
     if (Object.keys(eventsByDay).length > 0) {
       // Format events grouped by day

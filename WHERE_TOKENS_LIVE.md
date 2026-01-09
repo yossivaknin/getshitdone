@@ -90,6 +90,14 @@ Object.keys(localStorage)
 3. **Retrieve tokens server-side** when needed
 4. **Tokens persist** across browsers/devices
 
+## Server endpoints
+
+- POST `/api/save-google-tokens` — Upserts `google_token` and `google_refresh` into `user_tokens` for the authenticated user (used by the web client after OAuth login).
+- POST `/api/refresh-token` — Exchanges a refresh token for a new access token using the server-side `GOOGLE_CLIENT_SECRET` (called by client-side refresh logic).
+- POST `/api/calendar/schedule` — Server-side scheduling helper: accepts `taskData` and (optionally) working hours/timezone and uses stored tokens from `user_tokens` to schedule events so mobile clients don't need to hold tokens locally.
+
+Note: After applying the `create-user-tokens-table.sql` migration, add `SUPABASE_SERVICE_ROLE_KEY` (optional but recommended) and `GOOGLE_CLIENT_SECRET` to your environment so token persistence and server-side refresh work securely.
+
 ## 🔧 Quick Fix: Reconnect
 
 If your token disappeared:
