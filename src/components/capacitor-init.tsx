@@ -247,58 +247,80 @@ export function CapacitorInit() {
                   fromSupabase: fromSupabase === 'true'
                 });
                 
-                // Navigate to auth callback in WebView to complete session setup
-                // This ensures cookies are set in the WebView context
+// Instead of navigating (which gets cancelled with error -999), use fetch to call the callback route
+                // This will set cookies via the response, then we navigate to /app
                 const callbackUrl = new URL('/auth/callback', window.location.origin);
                 if (code) callbackUrl.searchParams.set('code', code);
                 if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
                 if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
                 if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
                 
-                logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
-                logToXcode('log', '[Capacitor] Current window location:', window.location.href);
-                logToXcode('log', '[Capacitor] Window origin:', window.location.origin);
-                logToXcode('log', '[Capacitor] Callback URL origin:', callbackUrl.origin);
-                logToXcode('log', '[Capacitor] Callback URL pathname:', callbackUrl.pathname);
-                logToXcode('log', '[Capacitor] Callback URL search:', callbackUrl.search);
+                logToXcode('log', '[Capacitor] OAuth callback - using fetch instead of navigation');
+                logToXcode('log', '[Capacitor] Callback URL:', callbackUrl.toString());
                 
-                // Try to navigate - if it fails, show error
-                try {
-                  logToXcode('log', '[Capacitor] Attempting navigation to:', callbackUrl.toString());
-                  
-                  // Use location.replace first (less likely to be cancelled than href)
-                  // Error -999 means navigation was cancelled, replace is more reliable
-                  logToXcode('log', '[Capacitor] Using location.replace (more reliable than href)');
-                  window.location.replace(callbackUrl.toString());
-                  
-                  // Fallback: if replace doesn't work, try href after a delay
-                  setTimeout(() => {
-                    const currentUrl = window.location.href;
-                    logToXcode('log', '[Capacitor] Checking navigation status after 300ms...');
-                    logToXcode('log', '[Capacitor] Current URL:', currentUrl);
-                    logToXcode('log', '[Capacitor] Target URL:', callbackUrl.toString());
-                    if (!currentUrl.includes(callbackUrl.pathname)) {
-                      logToXcode('warn', '[Capacitor] Replace may have failed, trying href as fallback...');
-                      try {
-                        window.location.href = callbackUrl.toString();
-                      } catch (e) {
-                        logToXcode('error', '[Capacitor] Both navigation methods failed:', e);
-                      }
+                // Use fetch with redirect: 'manual' to get the redirect URL without following it
+                // This prevents navigation cancellation (error -999)
+                (async () => {
+                  try {
+                    logToXcode('log', '[Capacitor] Fetching callback route to set cookies...');
+                    
+                    const response = await fetch(callbackUrl.toString(), {
+                      method: 'GET',
+                      credentials: 'include', // Important: include cookies
+                      redirect: 'manual', // Don't follow redirects automatically
+                    });
+                    
+                    logToXcode('log', '[Capacitor] Callback fetch response:', {
+                      status: response.status,
+                      statusText: response.statusText,
+                      type: response.type,
+                      redirected: response.redirected,
+                      url: response.url,
+                    });
+                    
+                    // Get redirect location from response
+                    const redirectLocation = response.headers.get('location');
+                    
+                    if (redirectLocation) {
+                      logToXcode('log', '[Capacitor] Redirect location from callback:', redirectLocation);
+                      
+                      // Parse the redirect URL to get the final destination
+                      const finalUrl = new URL(redirectLocation, window.location.origin);
+                      logToXcode('log', '[Capacitor] Final redirect URL:', finalUrl.toString());
+                      
+                      // Now navigate to the final URL (should be /app with tokens)
+                      // Use a small delay to ensure cookies are set
+                      setTimeout(() => {
+                        logToXcode('log', '[Capacitor] Navigating to final URL:', finalUrl.toString());
+                        window.location.href = finalUrl.toString();
+                      }, 100);
+                    } else if (response.status === 302 || response.status === 307 || response.status === 308) {
+                      // Redirect status but no location header - try to navigate to /app
+                      logToXcode('warn', '[Capacitor] Redirect status but no location header, navigating to /app');
+                      setTimeout(() => {
+                        window.location.href = '/app?auth_complete=true';
+                      }, 100);
                     } else {
-                      logToXcode('log', '[Capacitor] Navigation successful');
+                      // No redirect, navigate to /app directly
+                      logToXcode('log', '[Capacitor] No redirect, navigating to /app');
+                      setTimeout(() => {
+                        window.location.href = '/app?auth_complete=true';
+                      }, 100);
                     }
-                  }, 300);
-                } catch (navErr: any) {
-                  logToXcode('error', '[CapacitorInit] ❌ Navigation error:', {
-                    error: navErr,
-                    errorMessage: navErr?.message,
-                    callbackUrl: callbackUrl.toString()
-                  });
-                  // Fallback: try router if available
-                  if ((window as any).router) {
-                    (window as any).router.push(callbackUrl.pathname + callbackUrl.search);
+                  } catch (fetchErr: any) {
+                    logToXcode('error', '[CapacitorInit] ❌ Fetch error:', {
+                      error: fetchErr,
+                      errorMessage: fetchErr?.message,
+                      errorStack: fetchErr?.stack,
+                    });
+                    
+                    // Fallback: try direct navigation if fetch fails
+                    logToXcode('warn', '[Capacitor] Falling back to direct navigation...');
+                    setTimeout(() => {
+                      window.location.href = callbackUrl.toString();
+                    }, 200);
                   }
-                }
+                })();
               } catch (err: any) {
                 logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen:', {
                   error: err,
