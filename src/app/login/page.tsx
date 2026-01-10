@@ -9,9 +9,9 @@ function LoginForm() {
       className="min-h-screen bg-[#0F0F0F] text-white flex items-center justify-center p-4 safe-top" 
       style={{ paddingTop: `calc(1rem + env(safe-area-inset-top))` }}
     >
-      {/* DEBUG: Current time - updates dynamically */}
+      {/* DEBUG: Build time - 2026-01-09 21:24:35 */}
       <div className="fixed top-16 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs font-mono z-50">
-        {typeof window !== 'undefined' ? new Date().toLocaleString() : 'Loading...'}
+        Build: 2026-01-09 21:24:35
       </div>
       <div className="w-full max-w-md">
         {/* Logo/Brand Section */}
