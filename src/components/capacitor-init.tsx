@@ -247,80 +247,89 @@ export function CapacitorInit() {
                   fromSupabase: fromSupabase === 'true'
                 });
                 
-// Instead of navigating (which gets cancelled with error -999), use fetch to call the callback route
-                // This will set cookies via the response, then we navigate to /app
-                const callbackUrl = new URL('/auth/callback', window.location.origin);
-                if (code) callbackUrl.searchParams.set('code', code);
-                if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
-                if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
-                if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
-                
-                logToXcode('log', '[Capacitor] OAuth callback - using fetch instead of navigation');
-                logToXcode('log', '[Capacitor] Callback URL:', callbackUrl.toString());
-                
-                // Use fetch with redirect: 'manual' to get the redirect URL without following it
-                // This prevents navigation cancellation (error -999)
-                (async () => {
-                  try {
-                    logToXcode('log', '[Capacitor] Fetching callback route to set cookies...');
-                    
-                    const response = await fetch(callbackUrl.toString(), {
-                      method: 'GET',
-                      credentials: 'include', // Important: include cookies
-                      redirect: 'manual', // Don't follow redirects automatically
-                    });
-                    
-                    logToXcode('log', '[Capacitor] Callback fetch response:', {
-                      status: response.status,
-                      statusText: response.statusText,
-                      type: response.type,
-                      redirected: response.redirected,
-                      url: response.url,
-                    });
-                    
-                    // Get redirect location from response
-                    const redirectLocation = response.headers.get('location');
-                    
-                    if (redirectLocation) {
-                      logToXcode('log', '[Capacitor] Redirect location from callback:', redirectLocation);
+                // Use Supabase client directly to exchange code for session
+                // This avoids navigation cancellation issues (error -999)
+                if (code && fromSupabase === 'true') {
+                  logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
+                  
+                  (async () => {
+                    try {
+                      // Dynamically import Supabase client to avoid SSR issues
+                      const { createClient } = await import('@/utils/supabase/client');
+                      const supabase = createClient();
                       
-                      // Parse the redirect URL to get the final destination
-                      const finalUrl = new URL(redirectLocation, window.location.origin);
-                      logToXcode('log', '[Capacitor] Final redirect URL:', finalUrl.toString());
+                      logToXcode('log', '[Capacitor] Supabase client created, exchanging code...');
                       
-                      // Now navigate to the final URL (should be /app with tokens)
-                      // Use a small delay to ensure cookies are set
-                      setTimeout(() => {
-                        logToXcode('log', '[Capacitor] Navigating to final URL:', finalUrl.toString());
-                        window.location.href = finalUrl.toString();
-                      }, 100);
-                    } else if (response.status === 302 || response.status === 307 || response.status === 308) {
-                      // Redirect status but no location header - try to navigate to /app
-                      logToXcode('warn', '[Capacitor] Redirect status but no location header, navigating to /app');
-                      setTimeout(() => {
-                        window.location.href = '/app?auth_complete=true';
-                      }, 100);
-                    } else {
-                      // No redirect, navigate to /app directly
-                      logToXcode('log', '[Capacitor] No redirect, navigating to /app');
-                      setTimeout(() => {
-                        window.location.href = '/app?auth_complete=true';
-                      }, 100);
-                    }
-                  } catch (fetchErr: any) {
-                    logToXcode('error', '[CapacitorInit] ❌ Fetch error:', {
-                      error: fetchErr,
-                      errorMessage: fetchErr?.message,
-                      errorStack: fetchErr?.stack,
-                    });
-                    
-                    // Fallback: try direct navigation if fetch fails
-                    logToXcode('warn', '[Capacitor] Falling back to direct navigation...');
-                    setTimeout(() => {
+                      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+                      
+                      if (error) {
+                        logToXcode('error', '[Capacitor] ❌ Session exchange error:', {
+                          error: error.message,
+                          errorCode: error.status,
+                        });
+                        window.location.href = '/login?error=session_exchange_failed';
+                        return;
+                      }
+                      
+                      if (data?.session) {
+                        logToXcode('log', '[Capacitor] ✅ Session created successfully');
+                        logToXcode('log', '[Capacitor] User ID:', data.session.user.id);
+                        logToXcode('log', '[Capacitor] Has provider token:', !!data.session.provider_token);
+                        
+                        // Extract Google token if available
+                        const providerToken = data.session.provider_token;
+                        const providerRefresh = data.session.provider_refresh_token;
+                        
+                        // Build redirect URL with tokens
+                        const appUrl = new URL('/app', window.location.origin);
+                        if (providerToken) {
+                          appUrl.searchParams.set('google_token', providerToken);
+                          logToXcode('log', '[Capacitor] Google token extracted from session');
+                        }
+                        if (providerRefresh) {
+                          appUrl.searchParams.set('google_refresh', providerRefresh);
+                        }
+                        appUrl.searchParams.set('from_supabase', 'true');
+                        appUrl.searchParams.set('auth_complete', 'true');
+                        
+                        logToXcode('log', '[Capacitor] Navigating to app:', appUrl.toString());
+                        
+                        // Use a small delay to ensure session is fully set
+                        setTimeout(() => {
+                          window.location.href = appUrl.toString();
+                        }, 200);
+                      } else {
+                        logToXcode('warn', '[Capacitor] No session in response, redirecting to login');
+                        window.location.href = '/login?error=no_session';
+                      }
+                    } catch (err: any) {
+                      logToXcode('error', '[CapacitorInit] ❌ Error exchanging code:', {
+                        error: err,
+                        errorMessage: err?.message,
+                        errorStack: err?.stack,
+                      });
+                      // Fallback: try server-side callback
+                      logToXcode('warn', '[Capacitor] Falling back to server-side callback...');
+                      const callbackUrl = new URL('/auth/callback', window.location.origin);
+                      callbackUrl.searchParams.set('code', code);
+                      if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
+                      if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
+                      callbackUrl.searchParams.set('from_supabase', fromSupabase || 'true');
                       window.location.href = callbackUrl.toString();
-                    }, 200);
-                  }
-                })();
+                    }
+                  })();
+                } else {
+                  // No code or not from Supabase - use server-side callback
+                  logToXcode('log', '[Capacitor] Using server-side callback route...');
+                  const callbackUrl = new URL('/auth/callback', window.location.origin);
+                  if (code) callbackUrl.searchParams.set('code', code);
+                  if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
+                  if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
+                  if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
+                  
+                  logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
+                  window.location.href = callbackUrl.toString();
+                }
               } catch (err: any) {
                 logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen:', {
                   error: err,
