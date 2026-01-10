@@ -10,7 +10,7 @@ function LoginForm() {
       style={{ paddingTop: `calc(1rem + env(safe-area-inset-top))` }}
     >
       {/* DEBUG: Current build time - 2026-01-09 19:53:03 */}
-      <div className="fixed top-4 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs font-mono z-50">
+      <div className="fixed top-16 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs font-mono z-50">
         Build: 2026-01-09 19:53:03
       </div>
       <div className="w-full max-w-md">
