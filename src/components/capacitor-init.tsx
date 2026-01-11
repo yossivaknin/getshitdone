@@ -249,7 +249,7 @@ export function CapacitorInit() {
                 
                 // Use Supabase client directly to exchange code for session
                 // This avoids navigation cancellation issues (error -999)
-                if (code && fromSupabase === 'true') {
+                if (code) {  // Always use client-side exchange when code is present
                   logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
                   
                   (async () => {
