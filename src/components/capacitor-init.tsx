@@ -247,9 +247,33 @@ export function CapacitorInit() {
                   fromSupabase: fromSupabase === 'true'
                 });
                 
-                // Use Supabase client directly to exchange code for session
-                // This avoids navigation cancellation issues (error -999)
-                if (code) {  // Always use client-side exchange when code is present
+                                // Use server-side callback route to exchange code and set cookies
+                // Client-side exchange doesn't set cookies that middleware can see
+                // Server-side route will set cookies properly and redirect to /app
+                if (code) {
+                  logToXcode('log', '[Capacitor] Using server-side callback route for session exchange...');
+                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
+                  
+                  // Navigate to server-side callback route which will:
+                  // 1. Exchange code for session (server-side)
+                  // 2. Set cookies properly
+                  // 3. Redirect to /app with auth_complete flag
+                  const callbackUrl = new URL('/auth/callback', window.location.origin);
+                  callbackUrl.searchParams.set('code', code);
+                  callbackUrl.searchParams.set('from_supabase', 'true');
+                  callbackUrl.searchParams.set('capacitor', 'true'); // Flag for Capacitor
+                  
+                  logToXcode('log', '[Capacitor] Navigating to callback route:', callbackUrl.toString());
+                  
+                  // Use location.replace to avoid navigation cancellation
+                  window.location.replace(callbackUrl.toString());
+                  return;
+                }
+                
+                // Legacy: Client-side exchange (kept as fallback but shouldn't be reached)
+                if (code && fromSupabase === 'true') {
+                  logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
+                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
                   logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
                   logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
                   
