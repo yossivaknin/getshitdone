@@ -303,10 +303,25 @@ export function CapacitorInit() {
                         
                         logToXcode('log', '[Capacitor] Navigating to app:', appUrl.toString());
                         
-                        // Use a small delay to ensure session is fully set
+                        // Verify session is actually set before navigating
+                        const currentSession = await supabase.auth.getSession();
+                        logToXcode('log', '[Capacitor] Session verification:', {
+                          hasSession: !!currentSession?.data?.session,
+                          userId: currentSession?.data?.session?.user?.id,
+                        });
+                        
+                        if (!currentSession?.data?.session) {
+                          logToXcode('error', '[Capacitor] ❌ Session not found after exchange, redirecting to login');
+                          window.location.href = '/login?error=session_not_persisted';
+                          return;
+                        }
+                        
+                        // Use a longer delay to ensure session cookies are set and middleware can see them
+                        logToXcode('log', '[Capacitor] Waiting 500ms for session to persist...');
                         setTimeout(() => {
+                          logToXcode('log', '[Capacitor] Navigating to app now...');
                           window.location.href = appUrl.toString();
-                        }, 200);
+                        }, 500);
                       } else {
                         logToXcode('warn', '[Capacitor] No session in response, redirecting to login');
                         window.location.href = '/login?error=no_session';
