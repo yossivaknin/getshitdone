@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react';
-import { saveGoogleCalendarTokens, getGoogleCalendarTokens } from '@/app/actions';
+import { saveGoogleCalendarTokens, getGoogleCalendarTokens, logout } from '@/app/actions';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -728,7 +728,15 @@ export default function SettingsPage() {
             Back to Mission Control
           </Link>
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-gray-400">Configure your Google Calendar integration</p>
+          <p className="text-gray-400">
+          <form action={logout}>
+            <button
+              type="submit"
+              className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              Sign Out
+            </button>
+          </form>Configure your Google Calendar integration</p>
         </div>
 
         {/* Google Calendar Connection */}
