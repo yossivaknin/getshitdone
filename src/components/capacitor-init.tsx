@@ -251,6 +251,7 @@ export function CapacitorInit() {
                 // This avoids navigation cancellation issues (error -999)
                 if (code) {  // Always use client-side exchange when code is present
                   logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
+                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
                   
                   (async () => {
                     try {
@@ -270,6 +271,14 @@ export function CapacitorInit() {
                         window.location.href = '/login?error=session_exchange_failed';
                         return;
                       }
+                      
+                      logToXcode('log', '[Capacitor] Session exchange response:', {
+                        hasData: !!data,
+                        hasSession: !!data?.session,
+                        hasUser: !!data?.session?.user,
+                        hasProviderToken: !!data?.session?.provider_token,
+                        error: error ? error.message : null,
+                      });
                       
                       if (data?.session) {
                         logToXcode('log', '[Capacitor] ✅ Session created successfully');
@@ -303,6 +312,13 @@ export function CapacitorInit() {
                         window.location.href = '/login?error=no_session';
                       }
                     } catch (err: any) {
+                      logToXcode('error', '[Capacitor] ❌ Exception during code exchange:', {
+                        errorName: err?.name,
+                        errorMessage: err?.message,
+                        errorStack: err?.stack,
+                        errorString: String(err),
+                        errorType: typeof err,
+                      });
                       logToXcode('error', '[CapacitorInit] ❌ Error exchanging code:', {
                         error: err,
                         errorMessage: err?.message,
