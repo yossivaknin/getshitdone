@@ -62,10 +62,53 @@ export async function GET(request: NextRequest) {
     });
     
     if (error) {
-      console.error('OAuth callback error:', error)
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
-      return NextResponse.redirect(
-        new URL('/login?message=' + encodeURIComponent('Authentication failed: ' + error.message), baseUrl)
+      console.error('[Auth Callback] ❌ OAuth callback error:', error)
+      console.error('[Auth Callback] Error details:', {
+        message: error.message,
+        status: error.status,
+        name: error.name,
+      })
+      
+      // Return error page instead of redirecting (helps with debugging)
+      return new NextResponse(
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Authentication Error</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; }
+              .container { text-align: center; padding: 2rem; max-width: 600px; }
+              .error { color: #ef4444; margin: 1rem 0; }
+              .code { background: #1A1A1A; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; font-family: monospace; font-size: 0.875rem; }
+              a { color: #10b981; text-decoration: none; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>❌ Authentication Failed</h1>
+              <div class="error">
+                <p><strong>Error:</strong> ${error.message || 'Unknown error'}</p>
+                <p><strong>Status:</strong> ${error.status || 'N/A'}</p>
+              </div>
+              <div class="code">
+                <p>This usually means:</p>
+                <ul style="text-align: left; margin: 1rem 0;">
+                  <li>The authorization code has expired</li>
+                  <li>The code has already been used</li>
+                  <li>Supabase redirect URLs are misconfigured</li>
+                  <li>There's a network issue</li>
+                </ul>
+              </div>
+              <p><a href="/login">Return to Login</a></p>
+            </div>
+          </body>
+        </html>`,
+        {
+          status: 400,
+          headers: { 'Content-Type': 'text/html' },
+        }
       )
     }
 
@@ -292,10 +335,27 @@ setTimeout(() => {
     return response
   }
 
-  // If there's no code, redirect to login
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url.split('/auth/callback')[0]
-  return NextResponse.redirect(
-    new URL('/login?message=' + encodeURIComponent('Authentication failed: No authorization code'), baseUrl)
+  // If there's no code, return error page
+  return new NextResponse(
+    `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>No Authorization Code</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; text-align: center; padding: 2rem; }
+          a { color: #10b981; }
+        </style>
+      </head>
+      <body>
+        <div>
+          <h1>❌ No Authorization Code</h1>
+          <p>The OAuth callback did not include an authorization code.</p>
+          <p><a href="/login">Return to Login</a></p>
+        </div>
+      </body>
+    </html>`,
+    { status: 400, headers: { 'Content-Type': 'text/html' } }
   )
 }
 
