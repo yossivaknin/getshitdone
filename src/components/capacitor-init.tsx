@@ -247,26 +247,74 @@ export function CapacitorInit() {
                   fromSupabase: fromSupabase === 'true'
                 });
                 
-                                // Use server-side callback route to exchange code and set cookies
-                // Client-side exchange doesn't set cookies that middleware can see
-                // Server-side route will set cookies properly and redirect to /app
+                                // Use fetch to call callback route, get cookies, then navigate
+                // This avoids white screen from redirect
                 if (code) {
-                  logToXcode('log', '[Capacitor] Using server-side callback route for session exchange...');
+                  logToXcode('log', '[Capacitor] Using fetch to call callback route...');
                   logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
                   
-                  // Navigate to server-side callback route which will:
-                  // 1. Exchange code for session (server-side)
-                  // 2. Set cookies properly
-                  // 3. Redirect to /app with auth_complete flag
-                  const callbackUrl = new URL('/auth/callback', window.location.origin);
-                  callbackUrl.searchParams.set('code', code);
-                  callbackUrl.searchParams.set('from_supabase', 'true');
-                  callbackUrl.searchParams.set('capacitor', 'true'); // Flag for Capacitor
-                  
-                  logToXcode('log', '[Capacitor] Navigating to callback route:', callbackUrl.toString());
-                  
-                  // Use location.replace to avoid navigation cancellation
-                  window.location.replace(callbackUrl.toString());
+                  (async () => {
+                    try {
+                      const callbackUrl = new URL('/auth/callback', window.location.origin);
+                      callbackUrl.searchParams.set('code', code);
+                      callbackUrl.searchParams.set('from_supabase', 'true');
+                      callbackUrl.searchParams.set('capacitor', 'true');
+                      
+                      logToXcode('log', '[Capacitor] Fetching callback route:', callbackUrl.toString());
+                      
+                      // Fetch with credentials to get cookies
+                      const response = await fetch(callbackUrl.toString(), {
+                        method: 'GET',
+                        credentials: 'include',
+                        redirect: 'manual', // Don't follow redirect automatically
+                      });
+                      
+                      logToXcode('log', '[Capacitor] Callback response:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        redirected: response.redirected,
+                        url: response.url,
+                      });
+                      
+                      // Get redirect location
+                      const redirectLocation = response.headers.get('location');
+                      
+                      if (redirectLocation) {
+                        logToXcode('log', '[Capacitor] Redirect location:', redirectLocation);
+                        // Parse redirect URL
+                        const finalUrl = new URL(redirectLocation, window.location.origin);
+                        logToXcode('log', '[Capacitor] Final URL:', finalUrl.toString());
+                        
+                        // Wait a bit for cookies to be set
+                        setTimeout(() => {
+                          logToXcode('log', '[Capacitor] Navigating to final URL...');
+                          window.location.href = finalUrl.toString();
+                        }, 300);
+                      } else if (response.status === 302 || response.status === 307) {
+                        // Redirect status but no location - navigate to /app
+                        logToXcode('warn', '[Capacitor] Redirect status but no location, navigating to /app');
+                        setTimeout(() => {
+                          window.location.href = '/app?auth_complete=true';
+                        }, 300);
+                      } else {
+                        logToXcode('warn', '[Capacitor] Unexpected response, navigating to /app');
+                        setTimeout(() => {
+                          window.location.href = '/app?auth_complete=true';
+                        }, 300);
+                      }
+                    } catch (err: any) {
+                      logToXcode('error', '[Capacitor] ❌ Fetch error:', {
+                        error: err?.message,
+                        errorStack: err?.stack,
+                      });
+                      // Fallback: try direct navigation
+                      const callbackUrl = new URL('/auth/callback', window.location.origin);
+                      callbackUrl.searchParams.set('code', code);
+                      callbackUrl.searchParams.set('from_supabase', 'true');
+                      callbackUrl.searchParams.set('capacitor', 'true');
+                      window.location.href = callbackUrl.toString();
+                    }
+                  })();
                   return;
                 }
                 
