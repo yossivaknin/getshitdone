@@ -384,47 +384,103 @@ setTimeout(() => {
     { status: 400, headers: { 'Content-Type': 'text/html' } }
   )
   } catch (error: any) {
+    const errorMessage = error?.message || String(error) || 'Unknown error';
+    const errorName = error?.name || 'Error';
+    const errorStack = error?.stack || 'No stack trace available';
+    const errorString = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+    
     console.error('[Auth Callback] ❌❌❌ UNEXPECTED ERROR:', {
-      error: error,
-      errorMessage: error?.message,
-      errorStack: error?.stack,
-      errorName: error?.name,
+      errorMessage,
+      errorName,
+      errorStack: errorStack.substring(0, 500), // Truncate for console
+      errorString: errorString.substring(0, 500), // Truncate for console
     });
     
-    return new NextResponse(
-      `<!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Server Error</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; padding: 2rem; }
-            .container { max-width: 600px; text-align: center; }
-            .error { background: #1A1A1A; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: left; }
-            pre { font-family: monospace; font-size: 0.875rem; white-space: pre-wrap; word-break: break-all; }
-            a { color: #10b981; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>❌ Server Error (500)</h1>
-            <div class="error">
-              <p><strong>Error:</strong> ${error?.message || 'Unknown error'}</p>
-              <p><strong>Type:</strong> ${error?.name || 'Error'}</p>
-              <details>
-                <summary>Stack Trace</summary>
-                <pre>${error?.stack || 'No stack trace'}</pre>
-              </details>
-            </div>
-            <p><a href="/login">Return to Login</a></p>
-          </div>
-        </body>
-      </html>`,
-      {
-        status: 500,
-        headers: { 'Content-Type': 'text/html' },
-      }
-    );
+    // Return a simpler error page that shows the full error message
+    const errorHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server Error (500)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      background: #0F0F0F; 
+      color: #fff; 
+      padding: 2rem;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container { 
+      max-width: 700px; 
+      width: 100%;
+    }
+    h1 { color: #ef4444; margin-bottom: 1.5rem; font-size: 1.5rem; }
+    .error-box { 
+      background: #1A1A1A; 
+      padding: 1.5rem; 
+      border-radius: 0.5rem; 
+      margin-bottom: 1rem;
+      border: 1px solid #333;
+    }
+    .error-box p { margin-bottom: 0.75rem; }
+    .error-box strong { color: #eab308; display: block; margin-bottom: 0.25rem; }
+    pre { 
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; 
+      font-size: 0.75rem; 
+      white-space: pre-wrap; 
+      word-break: break-all;
+      background: #0F0F0F;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .btn { 
+      display: inline-block;
+      background: #10b981; 
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      margin-top: 1rem;
+      font-weight: 600;
+    }
+    .btn:hover { background: #059669; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>❌ Server Error (500)</h1>
+    <div class="error-box">
+      <p><strong>Error Message:</strong></p>
+      <pre>${errorMessage}</pre>
+    </div>
+    <div class="error-box">
+      <p><strong>Error Type:</strong></p>
+      <pre>${errorName}</pre>
+    </div>
+    <details class="error-box" style="margin-top: 1rem;">
+      <summary style="cursor: pointer; color: #10b981; margin-bottom: 0.5rem;"><strong>Stack Trace (click to expand)</strong></summary>
+      <pre>${errorStack}</pre>
+    </details>
+    <a href="/login" class="btn">Return to Login</a>
+  </div>
+</body>
+</html>`;
+    
+    return new NextResponse(errorHtml, {
+      status: 500,
+      headers: { 
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
   }
 }
 
