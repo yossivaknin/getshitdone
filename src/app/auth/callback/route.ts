@@ -382,7 +382,8 @@ setTimeout(() => {
       </body>
     </html>`,
     { status: 400, headers: { 'Content-Type': 'text/html' } }
-  )
+  );
+  }
   } catch (error: any) {
     const errorMessage = error?.message || String(error) || 'Unknown error';
     const errorName = error?.name || 'Error';
