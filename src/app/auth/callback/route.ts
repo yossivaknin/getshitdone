@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
+try {
   console.log('[Auth Callback] ========== CALLBACK ROUTE CALLED ==========');
   console.log('[Auth Callback] Request URL:', request.url);
   console.log('[Auth Callback] Request origin:', new URL(request.url).origin);
@@ -357,5 +358,48 @@ setTimeout(() => {
     </html>`,
     { status: 400, headers: { 'Content-Type': 'text/html' } }
   )
+  } catch (error: any) {
+    console.error('[Auth Callback] ❌❌❌ UNEXPECTED ERROR:', {
+      error: error,
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      errorName: error?.name,
+    });
+    
+    return new NextResponse(
+      `<!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Server Error</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0F0F0F; color: #fff; padding: 2rem; }
+            .container { max-width: 600px; text-align: center; }
+            .error { background: #1A1A1A; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: left; }
+            pre { font-family: monospace; font-size: 0.875rem; white-space: pre-wrap; word-break: break-all; }
+            a { color: #10b981; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>❌ Server Error (500)</h1>
+            <div class="error">
+              <p><strong>Error:</strong> ${error?.message || 'Unknown error'}</p>
+              <p><strong>Type:</strong> ${error?.name || 'Error'}</p>
+              <details>
+                <summary>Stack Trace</summary>
+                <pre>${error?.stack || 'No stack trace'}</pre>
+              </details>
+            </div>
+            <p><a href="/login">Return to Login</a></p>
+          </div>
+        </body>
+      </html>`,
+      {
+        status: 500,
+        headers: { 'Content-Type': 'text/html' },
+      }
+    );
+  }
 }
 
