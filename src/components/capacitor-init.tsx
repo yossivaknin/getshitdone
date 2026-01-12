@@ -216,6 +216,10 @@ export function CapacitorInit() {
           let processedUrls = new Set<string>();
           
           App.addListener('appUrlOpen', (data: { url: string }) => {
+            logToXcode('log', '[Capacitor] ========== APP URL OPEN LISTENER TRIGGERED ==========');
+            logToXcode('log', '[Capacitor] Received URL:', data.url);
+            logToXcode('log', '[Capacitor] URL type:', typeof data.url);
+            logToXcode('log', '[Capacitor] Current window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
             logToXcode('log', '[Capacitor] App opened with URL:', data.url);
             
             // Prevent processing the same URL multiple times
