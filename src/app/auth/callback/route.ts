@@ -286,8 +286,23 @@ setTimeout(() => {
       
       // Ensure cookies are included in redirect response
       response.headers.set('location', redirectUrl.toString())
-      response.status = 302
-      return response
+      // Note: NextResponse.redirect() already sets status to 302
+      // Create a new redirect response with the updated location and cookies
+      const redirectResponse = NextResponse.redirect(redirectUrl.toString())
+      
+      // Copy all cookies from the original response
+      response.cookies.getAll().forEach(cookie => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, {
+          path: cookie.path || '/',
+          domain: cookie.domain,
+          sameSite: cookie.sameSite,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          maxAge: cookie.maxAge,
+        })
+      })
+      
+      return redirectResponse
     }
 
     // Successful authentication - check if Capacitor
