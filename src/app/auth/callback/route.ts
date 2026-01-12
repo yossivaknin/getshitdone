@@ -5,6 +5,29 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
 try {
+  // Validate required environment variables
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.error('[Auth Callback] ❌ NEXT_PUBLIC_SUPABASE_URL is missing');
+    return new NextResponse(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Configuration Error</title></head><body style="font-family: sans-serif; padding: 2rem; background: #0F0F0F; color: #fff;"><h1>❌ Configuration Error</h1><p>NEXT_PUBLIC_SUPABASE_URL is not set</p></body></html>`,
+      { status: 500, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
+  
+  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('[Auth Callback] ❌ NEXT_PUBLIC_SUPABASE_ANON_KEY is missing');
+    return new NextResponse(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Configuration Error</title></head><body style="font-family: sans-serif; padding: 2rem; background: #0F0F0F; color: #fff;"><h1>❌ Configuration Error</h1><p>NEXT_PUBLIC_SUPABASE_ANON_KEY is not set</p></body></html>`,
+      { status: 500, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
+  
+  console.log('[Auth Callback] Environment check:', {
+    hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    hasAppUrl: !!process.env.NEXT_PUBLIC_APP_URL,
+  });
+  
   console.log('[Auth Callback] ========== CALLBACK ROUTE CALLED ==========');
   console.log('[Auth Callback] Request URL:', request.url);
   console.log('[Auth Callback] Request origin:', new URL(request.url).origin);
