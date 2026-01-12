@@ -250,116 +250,54 @@ export function CapacitorInit() {
                                 // Use fetch to call callback route, get cookies, then navigate
                 // This avoids white screen from redirect
                 if (code) {
-                  logToXcode('log', '[Capacitor] Using fetch to call callback route...');
-                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
+                  logToXcode('log', '[Capacitor] ✅ Exchanging code on client (PKCE verifier is here)');
+                  logToXcode('log', '[Capacitor] Code received: ' + (code ? code.substring(0, 20) + '...' : 'none'));
                   
                   (async () => {
                     try {
-                      const callbackUrl = new URL('/auth/callback', window.location.origin);
-                      callbackUrl.searchParams.set('code', code);
-                      callbackUrl.searchParams.set('from_supabase', 'true');
-                      callbackUrl.searchParams.set('capacitor', 'true');
+                      // Dynamically import Supabase client to avoid SSR issues
+                      const { createClient } = await import('@/utils/supabase/client');
+                      const supabase = createClient();
                       
-                      logToXcode('log', '[Capacitor] ========== FETCHING CALLBACK ROUTE ==========');
-                      logToXcode('log', '[Capacitor] Callback URL:', callbackUrl.toString());
-                      logToXcode('log', '[Capacitor] URL origin:', callbackUrl.origin);
-                      logToXcode('log', '[Capacitor] URL pathname:', callbackUrl.pathname);
-                      logToXcode('log', '[Capacitor] URL search params:', callbackUrl.search);
-                      logToXcode('log', '[Capacitor] Current window location:', window.location.href);
-                      logToXcode('log', '[Capacitor] Window origin:', window.location.origin);
+                      logToXcode('log', '[Capacitor] Supabase client created, exchanging code for session...');
                       
-                      // Fetch with credentials to get cookies
-                      const response = await fetch(callbackUrl.toString(), {
-                        method: 'GET',
-                        credentials: 'include',
-                        redirect: 'manual', // Don't follow redirect automatically
-                      });
+                      // ✅ CORRECT: Exchange code on the device where PKCE verifier is stored
+                      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
                       
-                      logToXcode('log', '[Capacitor] Callback response:', {
-                        status: response.status,
-                        statusText: response.statusText,
-                        redirected: response.redirected,
-                        url: response.url,
-                        headers: Object.fromEntries(response.headers.entries()),
-                      });
-                      
-                      // Log response body if it's an error
-                      if (response.status >= 400) {
-                        try {
-                          const text = await response.text();
-                          // Log first 1000 chars, then try to extract error message
-                          logToXcode('error', '[Capacitor] Callback error response body (first 1000 chars):', text.substring(0, 1000));
-                          
-                          // Try to extract error message from HTML - multiple patterns
-                          // Pattern 1: <pre>Error Message</pre>
-                          const errorMatch1 = text.match(/<strong>Error Message:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/is);
-                          // Pattern 2: <pre>...</pre> after "Error Message:"
-                          const errorMatch2 = text.match(/Error Message:[\s\S]*?<pre[^>]*>([^<]+)<\/pre>/is);
-                          // Pattern 3: Just look for any <pre> with error-like content
-                          const errorMatch3 = text.match(/<pre[^>]*>([^<]{20,500})<\/pre>/is);
-                          
-                          if (errorMatch1) {
-                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 1):', errorMatch1[1].trim());
-                          } else if (errorMatch2) {
-                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 2):', errorMatch2[1].trim());
-                          } else if (errorMatch3) {
-                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 3):', errorMatch3[1].trim().substring(0, 200));
-                          } else {
-                            logToXcode('warn', '[Capacitor] ⚠️ Could not extract error message from HTML');
-                            // Log a larger chunk to help debug
-                            const errorSection = text.match(/<h1[^>]*>.*?<\/h1>([\s\S]{0,500})/i);
-                            if (errorSection) {
-                              logToXcode('error', '[Capacitor] Error section HTML:', errorSection[1].substring(0, 500));
-                            }
-                          }
-                          
-                          // Extract error type
-                          const errorTypeMatch = text.match(/<strong>Error Type:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/is);
-                          if (errorTypeMatch) {
-                            logToXcode('error', '[Capacitor] ✅ Extracted error type:', errorTypeMatch[1].trim());
-                          }
-                        } catch (e) {
-                          logToXcode('warn', '[Capacitor] Could not read error response body:', e);
-                        }
+                      if (error) {
+                        logToXcode('error', '[Capacitor] ❌ Session exchange failed:', {
+                          errorMessage: error.message,
+                          errorCode: error.status,
+                          errorName: error.name,
+                        });
+                        window.location.href = '/login?error=session_exchange_failed&details=' + encodeURIComponent(error.message);
+                        return;
                       }
                       
-                      // Get redirect location
-                      const redirectLocation = response.headers.get('location');
-                      
-                      if (redirectLocation) {
-                        logToXcode('log', '[Capacitor] Redirect location:', redirectLocation);
-                        // Parse redirect URL
-                        const finalUrl = new URL(redirectLocation, window.location.origin);
-                        logToXcode('log', '[Capacitor] Final URL:', finalUrl.toString());
-                        
-                        // Wait a bit for cookies to be set
-                        setTimeout(() => {
-                          logToXcode('log', '[Capacitor] Navigating to final URL...');
-                          window.location.href = finalUrl.toString();
-                        }, 300);
-                      } else if (response.status === 302 || response.status === 307) {
-                        // Redirect status but no location - navigate to /app
-                        logToXcode('warn', '[Capacitor] Redirect status but no location, navigating to /app');
-                        setTimeout(() => {
-                          window.location.href = '/app?auth_complete=true';
-                        }, 300);
-                      } else {
-                        logToXcode('warn', '[Capacitor] Unexpected response, navigating to /app');
-                        setTimeout(() => {
-                          window.location.href = '/app?auth_complete=true';
-                        }, 300);
+                      if (!data?.session) {
+                        logToXcode('error', '[Capacitor] ❌ No session in exchange response');
+                        window.location.href = '/login?error=no_session';
+                        return;
                       }
-                    } catch (err: any) {
-                      logToXcode('error', '[Capacitor] ❌ Fetch error:', {
-                        error: err?.message,
-                        errorStack: err?.stack,
+                      
+                      logToXcode('log', '[Capacitor] ✅ Session created successfully!', {
+                        hasSession: !!data.session,
+                        hasUser: !!data.session?.user,
+                        userId: data.session?.user?.id,
+                        hasProviderToken: !!data.session?.provider_token,
                       });
-                      // Fallback: try direct navigation
-                      const callbackUrl = new URL('/auth/callback', window.location.origin);
-                      callbackUrl.searchParams.set('code', code);
-                      callbackUrl.searchParams.set('from_supabase', 'true');
-                      callbackUrl.searchParams.set('capacitor', 'true');
-                      window.location.href = callbackUrl.toString();
+                      
+                      // Navigate to app after successful exchange
+                      logToXcode('log', '[Capacitor] Navigating to /app...');
+                      window.location.href = '/app?auth_complete=true';
+                    } catch (exchangeErr: any) {
+                      logToXcode('error', '[Capacitor] ❌ Error during client-side exchange:', {
+                        errorName: exchangeErr?.name,
+                        errorMessage: exchangeErr?.message,
+                        errorStack: exchangeErr?.stack,
+                        errorString: String(exchangeErr),
+                      });
+                      window.location.href = '/login?error=exchange_error&details=' + encodeURIComponent(exchangeErr?.message || 'Unknown error');
                     }
                   })();
                   return;
