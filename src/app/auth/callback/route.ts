@@ -285,8 +285,7 @@ setTimeout(() => {
       console.log('[Auth Callback] Response status:', response.status)
       
       // Ensure cookies are included in redirect response
-      response.headers.set('location', redirectUrl.toString())
-      // Note: NextResponse.redirect() already sets status to 302
+      // Note: NextResponse.redirect() already sets status to 302 and location header
       // Create a new redirect response with the updated location and cookies
       const redirectResponse = NextResponse.redirect(redirectUrl.toString())
       
