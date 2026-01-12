@@ -260,7 +260,13 @@ export function CapacitorInit() {
                       callbackUrl.searchParams.set('from_supabase', 'true');
                       callbackUrl.searchParams.set('capacitor', 'true');
                       
-                      logToXcode('log', '[Capacitor] Fetching callback route:', callbackUrl.toString());
+                      logToXcode('log', '[Capacitor] ========== FETCHING CALLBACK ROUTE ==========');
+                      logToXcode('log', '[Capacitor] Callback URL:', callbackUrl.toString());
+                      logToXcode('log', '[Capacitor] URL origin:', callbackUrl.origin);
+                      logToXcode('log', '[Capacitor] URL pathname:', callbackUrl.pathname);
+                      logToXcode('log', '[Capacitor] URL search params:', callbackUrl.search);
+                      logToXcode('log', '[Capacitor] Current window location:', window.location.href);
+                      logToXcode('log', '[Capacitor] Window origin:', window.location.origin);
                       
                       // Fetch with credentials to get cookies
                       const response = await fetch(callbackUrl.toString(), {
@@ -274,7 +280,18 @@ export function CapacitorInit() {
                         statusText: response.statusText,
                         redirected: response.redirected,
                         url: response.url,
+                        headers: Object.fromEntries(response.headers.entries()),
                       });
+                      
+                      // Log response body if it's an error
+                      if (response.status >= 400) {
+                        try {
+                          const text = await response.text();
+                          logToXcode('error', '[Capacitor] Callback error response body:', text.substring(0, 500));
+                        } catch (e) {
+                          logToXcode('warn', '[Capacitor] Could not read error response body');
+                        }
+                      }
                       
                       // Get redirect location
                       const redirectLocation = response.headers.get('location');
