@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 
 export async function GET(request: NextRequest) {
-try {
+  try { {
   // Validate required environment variables
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     console.error('[Auth Callback] ❌ NEXT_PUBLIC_SUPABASE_URL is missing');
