@@ -290,15 +290,33 @@ export function CapacitorInit() {
                           // Log first 1000 chars, then try to extract error message
                           logToXcode('error', '[Capacitor] Callback error response body (first 1000 chars):', text.substring(0, 1000));
                           
-                          // Try to extract error message from HTML
-                          const errorMatch = text.match(/<strong>Error Message:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/i);
-                          if (errorMatch) {
-                            logToXcode('error', '[Capacitor] Extracted error message:', errorMatch[1]);
+                          // Try to extract error message from HTML - multiple patterns
+                          // Pattern 1: <pre>Error Message</pre>
+                          const errorMatch1 = text.match(/<strong>Error Message:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/is);
+                          // Pattern 2: <pre>...</pre> after "Error Message:"
+                          const errorMatch2 = text.match(/Error Message:[\s\S]*?<pre[^>]*>([^<]+)<\/pre>/is);
+                          // Pattern 3: Just look for any <pre> with error-like content
+                          const errorMatch3 = text.match(/<pre[^>]*>([^<]{20,500})<\/pre>/is);
+                          
+                          if (errorMatch1) {
+                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 1):', errorMatch1[1].trim());
+                          } else if (errorMatch2) {
+                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 2):', errorMatch2[1].trim());
+                          } else if (errorMatch3) {
+                            logToXcode('error', '[Capacitor] ✅ Extracted error message (pattern 3):', errorMatch3[1].trim().substring(0, 200));
+                          } else {
+                            logToXcode('warn', '[Capacitor] ⚠️ Could not extract error message from HTML');
+                            // Log a larger chunk to help debug
+                            const errorSection = text.match(/<h1[^>]*>.*?<\/h1>([\s\S]{0,500})/i);
+                            if (errorSection) {
+                              logToXcode('error', '[Capacitor] Error section HTML:', errorSection[1].substring(0, 500));
+                            }
                           }
                           
-                          const errorTypeMatch = text.match(/<strong>Error Type:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/i);
+                          // Extract error type
+                          const errorTypeMatch = text.match(/<strong>Error Type:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/is);
                           if (errorTypeMatch) {
-                            logToXcode('error', '[Capacitor] Extracted error type:', errorTypeMatch[1]);
+                            logToXcode('error', '[Capacitor] ✅ Extracted error type:', errorTypeMatch[1].trim());
                           }
                         } catch (e) {
                           logToXcode('warn', '[Capacitor] Could not read error response body:', e);
