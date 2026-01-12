@@ -287,9 +287,21 @@ export function CapacitorInit() {
                       if (response.status >= 400) {
                         try {
                           const text = await response.text();
-                          logToXcode('error', '[Capacitor] Callback error response body:', text.substring(0, 500));
+                          // Log first 1000 chars, then try to extract error message
+                          logToXcode('error', '[Capacitor] Callback error response body (first 1000 chars):', text.substring(0, 1000));
+                          
+                          // Try to extract error message from HTML
+                          const errorMatch = text.match(/<strong>Error Message:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/i);
+                          if (errorMatch) {
+                            logToXcode('error', '[Capacitor] Extracted error message:', errorMatch[1]);
+                          }
+                          
+                          const errorTypeMatch = text.match(/<strong>Error Type:<\/strong>\s*<pre[^>]*>([^<]+)<\/pre>/i);
+                          if (errorTypeMatch) {
+                            logToXcode('error', '[Capacitor] Extracted error type:', errorTypeMatch[1]);
+                          }
                         } catch (e) {
-                          logToXcode('warn', '[Capacitor] Could not read error response body');
+                          logToXcode('warn', '[Capacitor] Could not read error response body:', e);
                         }
                       }
                       
