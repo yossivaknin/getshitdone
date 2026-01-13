@@ -35,9 +35,39 @@ function LoginForm() {
           </div>
 
           {/* Google Sign In Button */}
-          <form action={loginWithGoogle}>
+          <div>
             <button
-              type="submit"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  const { createClient } = await import('@/utils/supabase/client');
+                  const supabase = createClient();
+                  console.log('[Login] Initiating client-side Google OAuth (should store PKCE verifier in storage)');
+                  const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: 'com.sitrep.app://auth/callback', scopes: 'email profile https://www.googleapis.com/auth/calendar' },
+                  });
+
+                  if (error) {
+                    console.error('Client-side Google sign-in error', error);
+                    // Fallback: show message via query param
+                    window.location.href = '/login?message=' + encodeURIComponent('Google sign-in failed: ' + error.message);
+                    return;
+                  }
+
+                  if (data?.url) {
+                    // Navigate to the OAuth URL (this should open Safari and preserve PKCE in this WebView)
+                    window.location.href = data.url;
+                    return;
+                  }
+
+                  // If no URL returned, show an error
+                  window.location.href = '/login?message=' + encodeURIComponent('Google OAuth failed to start.');
+                } catch (err: any) {
+                  console.error('Exception starting client-side Google OAuth', err);
+                  window.location.href = '/login?message=' + encodeURIComponent('Google sign-in exception: ' + (err?.message || String(err)));
+                }
+              }}
               className="w-full flex items-center justify-center gap-3 py-3.5 px-4 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -60,7 +90,7 @@ function LoginForm() {
               </svg>
               <span>Continue with Google</span>
             </button>
-          </form>
+          </div>
 
           {/* Info Text */}
           <div className="mt-6 pt-6 border-t border-gray-800">

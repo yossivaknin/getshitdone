@@ -275,6 +275,19 @@ export function CapacitorInit() {
               const googleRefresh = url.searchParams.get('google_refresh');
               const fromSupabase = url.searchParams.get('from_supabase');
 
+              // Prevent processing the same code across reloads (avoid infinite loops on failures)
+              try {
+                if (code) {
+                  const processed = JSON.parse(localStorage.getItem('processedDeepLinkCodes') || '[]');
+                  if (processed.includes(code)) {
+                    logToXcode('warn', '[Capacitor] Code already processed previously, skipping:', code.substring(0, 20) + '...');
+                    return;
+                  }
+                }
+              } catch (e) {
+                // ignore parsing errors
+              }
+
               logToXcode('log', '[Capacitor] OAuth callback detected:', {
                 hasCode: !!code,
                 hasToken: !!googleToken,
@@ -314,7 +327,22 @@ export function CapacitorInit() {
 
                   try { localStorage.setItem('lastAuthError', JSON.stringify({ message: error.message, code: error.status, name: error.name, ts: Date.now() })); } catch {}
 
-                  // Surface the debug page so we don't show a blank screen
+                  // Handle PKCE missing specially to avoid repeated retries and loops
+                  const isPKCEMissing = error.name === 'AuthPKCECodeVerifierMissingError' || String(error.message).includes('PKCE code verifier not found');
+                  if (isPKCEMissing) {
+                    logToXcode('warn', '[Capacitor] PKCE verifier missing — clearing pending deep link and showing debug');
+                    try { localStorage.removeItem('pendingDeepLink'); } catch {}
+                    try { // mark the code as processed to avoid reprocessing across reloads
+                      const processed = JSON.parse(localStorage.getItem('processedDeepLinkCodes') || '[]');
+                      processed.push(code);
+                      localStorage.setItem('processedDeepLinkCodes', JSON.stringify(processed));
+                    } catch (e) {}
+
+                    window.location.href = '/debug?error=pkce_missing';
+                    return;
+                  }
+
+                  // For other errors, surface the debug page so we don't show a blank screen
                   window.location.href = '/debug?error=session_exchange_failed';
                   return;
                 }
@@ -335,7 +363,14 @@ export function CapacitorInit() {
 
                 try {
                   localStorage.setItem('lastAuthSuccess', JSON.stringify({ userId: data.session.user.id, ts: Date.now() }));
+                  // clear pending deep link on success
                   localStorage.removeItem('pendingDeepLink');
+                  // also mark code processed to prevent reprocessing if startup repeats
+                  try {
+                    const processed = JSON.parse(localStorage.getItem('processedDeepLinkCodes') || '[]');
+                    processed.push(code);
+                    localStorage.setItem('processedDeepLinkCodes', JSON.stringify(processed));
+                  } catch (e) {}
                 } catch (e) {
                   logToXcode('warn', '[Capacitor] Could not update localStorage after success:', String(e));
                 }

@@ -18,6 +18,15 @@ export default function DebugPage() {
       console.error('Could not read debug localStorage keys', e)
     }
 
+    // Show friendly guidance when PKCE missing is detected
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const err = urlParams.get('error')
+      if (err === 'pkce_missing') {
+        setLastError(JSON.stringify({ message: 'PKCE verifier not found. Start login from the app (not external Safari).' }))
+      }
+    } catch (e) {}
+
     function onStorage() {
       try {
         setPending(localStorage.getItem('pendingDeepLink'))
