@@ -132,6 +132,32 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// Best-effort early listener: persist any deep link quickly so cold starts don't lose it
+try {
+  if (typeof window !== 'undefined' && (window as any).Capacitor && !(window as any).__cap_pending_link_installed) {
+    try {
+      const { App } = require('@capacitor/app');
+      App.addListener('appUrlOpen', (data: { url: string }) => {
+        try {
+          if (data?.url) {
+            try { localStorage.setItem('pendingDeepLink', data.url); } catch (e) { /* ignore */ }
+            try { window.dispatchEvent(new CustomEvent('cap_pending_deeplink', { detail: { url: data.url } })); } catch (e) { }
+            console.log('[Capacitor Early] persisted pendingDeepLink:', data.url);
+          }
+        } catch (e) {
+          console.warn('[Capacitor Early] could not persist pendingDeepLink', e);
+        }
+      });
+      (window as any).__cap_pending_link_installed = true;
+      console.log('[Capacitor Early] appUrlOpen early listener installed');
+    } catch (e) {
+      console.warn('[Capacitor Early] failed to install early appUrlOpen listener', e);
+    }
+  }
+} catch (e) {
+  console.warn('[Capacitor Early] unexpected error while installing early listener', e);
+}
+
 export function CapacitorInit() {
   useEffect(() => {
     logToXcode('log', '[CapacitorInit] Component mounted');
@@ -211,226 +237,152 @@ export function CapacitorInit() {
           });
           
           // Handle deep links (OAuth callbacks, etc.)
-          logToXcode('log', '[CapacitorInit] Adding appUrlOpen listener for deep links...');
+          logToXcode('log', '[CapacitorInit] Adding enhanced appUrlOpen listener for deep links...');
           // Track processed URLs to prevent duplicate handling
           let processedUrls = new Set<string>();
-          
-          App.addListener('appUrlOpen', (data: { url: string }) => {
-            logToXcode('log', '[Capacitor] ========== APP URL OPEN LISTENER TRIGGERED ==========');
-            logToXcode('log', '[Capacitor] Received URL:', data.url);
-            logToXcode('log', '[Capacitor] URL type:', typeof data.url);
-            logToXcode('log', '[Capacitor] Current window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
-            logToXcode('log', '[Capacitor] App opened with URL:', data.url);
-            
-            // Prevent processing the same URL multiple times
-            if (processedUrls.has(data.url)) {
-              logToXcode('warn', '[Capacitor] URL already processed, ignoring:', data.url);
-              return;
-            }
-            
-            // Handle OAuth callback deep links
-            if (data.url.startsWith('com.sitrep.app://auth/callback')) {
-              // Mark as processed immediately
-              processedUrls.add(data.url);
-              
-              // Also check if we're already on the callback page to prevent loops
+
+          // Centralized handler for deep links - persists pending deep links and provides retry support
+          async function processDeepLink(rawUrl: string) {
+            try {
+              logToXcode('log', '[Capacitor] processDeepLink called with URL:', rawUrl);
+
+              // Persist pending deep link so a cold start or page reload can re-process it
+              try {
+                localStorage.setItem('pendingDeepLink', rawUrl);
+              } catch (e) {
+                logToXcode('warn', '[Capacitor] Could not write pendingDeepLink to localStorage:', String(e));
+              }
+
+              if (!rawUrl) {
+                logToXcode('warn', '[Capacitor] processDeepLink called with empty url');
+                return;
+              }
+
+              if (processedUrls.has(rawUrl)) {
+                logToXcode('warn', '[Capacitor] URL already processed, ignoring:', rawUrl);
+                return;
+              }
+              processedUrls.add(rawUrl);
+
               if (typeof window !== 'undefined' && window.location.pathname === '/auth/callback') {
                 logToXcode('warn', '[Capacitor] Already on callback page, ignoring deep link to prevent loop');
                 return;
               }
+
+              const url = new URL(rawUrl);
+              const code = url.searchParams.get('code');
+              const googleToken = url.searchParams.get('google_token');
+              const googleRefresh = url.searchParams.get('google_refresh');
+              const fromSupabase = url.searchParams.get('from_supabase');
+
+              logToXcode('log', '[Capacitor] OAuth callback detected:', {
+                hasCode: !!code,
+                hasToken: !!googleToken,
+                fromSupabase: fromSupabase === 'true',
+              });
+
+              if (!code) {
+                logToXcode('warn', '[Capacitor] No code found in deep link, redirecting to /debug');
+                window.location.href = '/debug';
+                return;
+              }
+
+              // Provide a persisted marker for this exchange attempt
               try {
-                const url = new URL(data.url);
-                const code = url.searchParams.get('code');
-                const googleToken = url.searchParams.get('google_token');
-                const googleRefresh = url.searchParams.get('google_refresh');
-                const fromSupabase = url.searchParams.get('from_supabase');
-                
-                logToXcode('log', '[Capacitor] OAuth callback detected:', {
-                  hasCode: !!code,
-                  hasToken: !!googleToken,
-                  fromSupabase: fromSupabase === 'true'
-                });
-                
-                                // Use fetch to call callback route, get cookies, then navigate
-                // This avoids white screen from redirect
-                if (code) {
-                  logToXcode('log', '[Capacitor] ✅ Exchanging code on client (PKCE verifier is here)');
-                  logToXcode('log', '[Capacitor] Code received: ' + (code ? code.substring(0, 20) + '...' : 'none'));
-                  
-                  (async () => {
-                    try {
-                      // Dynamically import Supabase client to avoid SSR issues
-                      const { createClient } = await import('@/utils/supabase/client');
-                      const supabase = createClient();
-                      
-                      logToXcode('log', '[Capacitor] Supabase client created, exchanging code for session...');
-                      
-                      // ✅ CORRECT: Exchange code on the device where PKCE verifier is stored
-                      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-                      
-                      if (error) {
-                        logToXcode('error', '[Capacitor] ❌ Session exchange failed:', {
-                          errorMessage: error.message,
-                          errorCode: error.status,
-                          errorName: error.name,
-                        });
-                        window.location.href = '/login?error=session_exchange_failed&details=' + encodeURIComponent(error.message);
-                        return;
-                      }
-                      
-                      if (!data?.session) {
-                        logToXcode('error', '[Capacitor] ❌ No session in exchange response');
-                        window.location.href = '/login?error=no_session';
-                        return;
-                      }
-                      
-                      logToXcode('log', '[Capacitor] ✅ Session created successfully!', {
-                        hasSession: !!data.session,
-                        hasUser: !!data.session?.user,
-                        userId: data.session?.user?.id,
-                        hasProviderToken: !!data.session?.provider_token,
-                      });
-                      
-                      // Navigate to app after successful exchange
-                      logToXcode('log', '[Capacitor] Navigating to /app...');
-                      window.location.href = '/app?auth_complete=true';
-                    } catch (exchangeErr: any) {
-                      logToXcode('error', '[Capacitor] ❌ Error during client-side exchange:', {
-                        errorName: exchangeErr?.name,
-                        errorMessage: exchangeErr?.message,
-                        errorStack: exchangeErr?.stack,
-                        errorString: String(exchangeErr),
-                      });
-                      window.location.href = '/login?error=exchange_error&details=' + encodeURIComponent(exchangeErr?.message || 'Unknown error');
-                    }
-                  })();
+                localStorage.setItem('lastExchangeAttempt', JSON.stringify({ codePreview: code.substring(0, 16) + '...', ts: Date.now() }));
+              } catch (e) {
+                logToXcode('warn', '[Capacitor] Could not write lastExchangeAttempt to localStorage:', String(e));
+              }
+
+              logToXcode('log', '[Capacitor] ✅ Exchanging code on client (PKCE verifier is here)');
+              logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
+
+              try {
+                const { createClient } = await import('@/utils/supabase/client');
+                const supabase = createClient();
+
+                logToXcode('log', '[Capacitor] Supabase client created, exchanging code for session...');
+
+                const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+                if (error) {
+                  logToXcode('error', '[Capacitor] ❌ Session exchange failed:', {
+                    errorMessage: error.message,
+                    errorCode: error.status,
+                    errorName: error.name,
+                  });
+
+                  try { localStorage.setItem('lastAuthError', JSON.stringify({ message: error.message, code: error.status, name: error.name, ts: Date.now() })); } catch {}
+
+                  // Surface the debug page so we don't show a blank screen
+                  window.location.href = '/debug?error=session_exchange_failed';
                   return;
                 }
-                
-                // Legacy: Client-side exchange (kept as fallback but shouldn't be reached)
-                if (code && fromSupabase === 'true') {
-                  logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
-                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
-                  logToXcode('log', '[Capacitor] Exchanging Supabase code for session directly...');
-                  logToXcode('log', '[Capacitor] Code received:', code.substring(0, 20) + '...');
-                  
-                  (async () => {
-                    try {
-                      // Dynamically import Supabase client to avoid SSR issues
-                      const { createClient } = await import('@/utils/supabase/client');
-                      const supabase = createClient();
-                      
-                      logToXcode('log', '[Capacitor] Supabase client created, exchanging code...');
-                      
-                      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-                      
-                      if (error) {
-                        logToXcode('error', '[Capacitor] ❌ Session exchange error:', {
-                          error: error.message,
-                          errorCode: error.status,
-                        });
-                        window.location.href = '/login?error=session_exchange_failed';
-                        return;
-                      }
-                      
-                      logToXcode('log', '[Capacitor] Session exchange response:', {
-                        hasData: !!data,
-                        hasSession: !!data?.session,
-                        hasUser: !!data?.session?.user,
-                        hasProviderToken: !!data?.session?.provider_token,
-                        error: error ? error.message : null,
-                      });
-                      
-                      if (data?.session) {
-                        logToXcode('log', '[Capacitor] ✅ Session created successfully');
-                        logToXcode('log', '[Capacitor] User ID:', data.session.user.id);
-                        logToXcode('log', '[Capacitor] Has provider token:', !!data.session.provider_token);
-                        
-                        // Extract Google token if available
-                        const providerToken = data.session.provider_token;
-                        const providerRefresh = data.session.provider_refresh_token;
-                        
-                        // Build redirect URL with tokens
-                        const appUrl = new URL('/app', window.location.origin);
-                        if (providerToken) {
-                          appUrl.searchParams.set('google_token', providerToken);
-                          logToXcode('log', '[Capacitor] Google token extracted from session');
-                        }
-                        if (providerRefresh) {
-                          appUrl.searchParams.set('google_refresh', providerRefresh);
-                        }
-                        appUrl.searchParams.set('from_supabase', 'true');
-                        appUrl.searchParams.set('auth_complete', 'true');
-                        
-                        logToXcode('log', '[Capacitor] Navigating to app:', appUrl.toString());
-                        
-                        // Verify session is actually set before navigating
-                        const currentSession = await supabase.auth.getSession();
-                        logToXcode('log', '[Capacitor] Session verification:', {
-                          hasSession: !!currentSession?.data?.session,
-                          userId: currentSession?.data?.session?.user?.id,
-                        });
-                        
-                        if (!currentSession?.data?.session) {
-                          logToXcode('error', '[Capacitor] ❌ Session not found after exchange, redirecting to login');
-                          window.location.href = '/login?error=session_not_persisted';
-                          return;
-                        }
-                        
-                        // Use a longer delay to ensure session cookies are set and middleware can see them
-                        logToXcode('log', '[Capacitor] Waiting 500ms for session to persist...');
-                        setTimeout(() => {
-                          logToXcode('log', '[Capacitor] Navigating to app now...');
-                          window.location.href = appUrl.toString();
-                        }, 500);
-                      } else {
-                        logToXcode('warn', '[Capacitor] No session in response, redirecting to login');
-                        window.location.href = '/login?error=no_session';
-                      }
-                    } catch (err: any) {
-                      logToXcode('error', '[Capacitor] ❌ Exception during code exchange:', {
-                        errorName: err?.name,
-                        errorMessage: err?.message,
-                        errorStack: err?.stack,
-                        errorString: String(err),
-                        errorType: typeof err,
-                      });
-                      logToXcode('error', '[CapacitorInit] ❌ Error exchanging code:', {
-                        error: err,
-                        errorMessage: err?.message,
-                        errorStack: err?.stack,
-                      });
-                      // Fallback: try server-side callback
-                      logToXcode('warn', '[Capacitor] Falling back to server-side callback...');
-                      const callbackUrl = new URL('/auth/callback', window.location.origin);
-                      callbackUrl.searchParams.set('code', code);
-                      if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
-                      if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
-                      callbackUrl.searchParams.set('from_supabase', fromSupabase || 'true');
-                      window.location.href = callbackUrl.toString();
-                    }
-                  })();
-                } else {
-                  // No code or not from Supabase - use server-side callback
-                  logToXcode('log', '[Capacitor] Using server-side callback route...');
-                  const callbackUrl = new URL('/auth/callback', window.location.origin);
-                  if (code) callbackUrl.searchParams.set('code', code);
-                  if (googleToken) callbackUrl.searchParams.set('google_token', googleToken);
-                  if (googleRefresh) callbackUrl.searchParams.set('google_refresh', googleRefresh);
-                  if (fromSupabase) callbackUrl.searchParams.set('from_supabase', fromSupabase);
-                  
-                  logToXcode('log', '[Capacitor] Navigating to callback URL:', callbackUrl.toString());
-                  window.location.href = callbackUrl.toString();
+
+                if (!data?.session) {
+                  logToXcode('error', '[Capacitor] ❌ No session in exchange response');
+                  try { localStorage.setItem('lastAuthError', JSON.stringify({ message: 'no_session', ts: Date.now() })); } catch {}
+                  window.location.href = '/debug?error=no_session';
+                  return;
                 }
-              } catch (err: any) {
-                logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen:', {
-                  error: err,
-                  errorType: typeof err,
-                  errorString: String(err),
-                  errorStack: err?.stack,
-                  errorMessage: err?.message,
+
+                logToXcode('log', '[Capacitor] ✅ Session created successfully!', {
+                  hasSession: !!data.session,
+                  hasUser: !!data.session?.user,
+                  userId: data.session?.user?.id,
+                  hasProviderToken: !!data.session?.provider_token,
                 });
+
+                try {
+                  localStorage.setItem('lastAuthSuccess', JSON.stringify({ userId: data.session.user.id, ts: Date.now() }));
+                  localStorage.removeItem('pendingDeepLink');
+                } catch (e) {
+                  logToXcode('warn', '[Capacitor] Could not update localStorage after success:', String(e));
+                }
+
+                // Navigate to app after successful exchange
+                logToXcode('log', '[Capacitor] Navigating to /app...');
+                window.location.href = '/app?auth_complete=true';
+                return;
+
+              } catch (exchangeErr: any) {
+                logToXcode('error', '[Capacitor] ❌ Error during client-side exchange:', {
+                  name: exchangeErr?.name,
+                  message: exchangeErr?.message,
+                  stack: exchangeErr?.stack,
+                });
+
+                try { localStorage.setItem('lastAuthError', JSON.stringify({ message: exchangeErr?.message || String(exchangeErr), stack: exchangeErr?.stack, ts: Date.now() })); } catch {}
+
+                // Navigate to debug page to surface error instead of blank screen
+                window.location.href = '/debug?error=exchange_exception';
+                return;
               }
+            } catch (err: any) {
+              logToXcode('error', '[Capacitor] ❌ Unexpected error in processDeepLink:', {
+                message: err?.message,
+                stack: err?.stack,
+              });
+              try { localStorage.setItem('lastAuthError', JSON.stringify({ message: err?.message || String(err), stack: err?.stack || null, ts: Date.now() })); } catch {}
+              window.location.href = '/debug?error=unexpected';
+            }
+          }
+
+          // Listen for events from native
+          App.addListener('appUrlOpen', (data: { url: string }) => {
+            logToXcode('log', '[Capacitor] ========== APP URL OPEN LISTENER TRIGGERED ==========', data.url);
+            try {
+              if (data && data.url) {
+                processDeepLink(data.url);
+              } else {
+                logToXcode('warn', '[Capacitor] appUrlOpen fired but no url present', data);
+              }
+            } catch (err: any) {
+              logToXcode('error', '[CapacitorInit] ❌ Error handling appUrlOpen event:', {
+                error: err,
+                errorMessage: err?.message,
+                errorStack: err?.stack,
+              });
             }
           }).catch((err: any) => {
             logToXcode('error', '[CapacitorInit] ❌ Error adding appUrlOpen listener:', {
@@ -441,6 +393,54 @@ export function CapacitorInit() {
               errorMessage: err?.message,
             });
           });
+
+          // Handle cold starts - ask native if there's a launch URL
+          (async () => {
+            try {
+              const maybeLaunch = await (App as any).getLaunchUrl?.();
+              const launchUrl = maybeLaunch?.url || maybeLaunch?.value || null;
+              if (launchUrl) {
+                logToXcode('log', '[Capacitor] getLaunchUrl returned:', launchUrl);
+                // Process it asynchronously
+                setTimeout(() => void processDeepLink(launchUrl), 50);
+              } else {
+                // No launch url - but check pendingDeepLink in storage in case it was saved earlier
+                try {
+                  const pending = localStorage.getItem('pendingDeepLink');
+                  if (pending) {
+                    logToXcode('log', '[Capacitor] Pending deep link found in storage on startup:', pending);
+                    setTimeout(() => void processDeepLink(pending), 50);
+                  }
+                } catch (e) {
+                  logToXcode('warn', '[Capacitor] Could not read pendingDeepLink from localStorage:', String(e));
+                }
+              }
+            } catch (err: any) {
+              logToXcode('warn', '[Capacitor] getLaunchUrl is not available or failed:', {
+                errorMessage: err?.message,
+                errorStack: err?.stack,
+              });
+            }
+          })();
+
+          // Expose a retry event that the debug page can trigger
+          try {
+            window.addEventListener('retryDeepLink', () => {
+              try {
+                const pending = localStorage.getItem('pendingDeepLink');
+                if (pending) {
+                  logToXcode('log', '[Capacitor] retryDeepLink event triggered, re-processing:', pending);
+                  void processDeepLink(pending);
+                } else {
+                  logToXcode('warn', '[Capacitor] retryDeepLink event triggered but no pendingDeepLink found');
+                }
+              } catch (e) {
+                logToXcode('error', '[Capacitor] Error during retryDeepLink handler:', String(e));
+              }
+            });
+          } catch (e) {
+            logToXcode('warn', '[Capacitor] Could not add retryDeepLink listener:', String(e));
+          }
         } else {
           logToXcode('warn', '[CapacitorInit] ⚠️ App or App.addListener not available');
         }
