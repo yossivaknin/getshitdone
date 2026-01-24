@@ -58,7 +58,41 @@ export default function SettingsPage() {
 
     // Wrap async code in an async IIFE
     (async () => {
-      if (connected === 'true' && token) {
+      if (connected === 'true') {
+        // Check if this is from Supabase OAuth (no token param means tokens were already saved in callback page)
+        if (!token) {
+          // Supabase OAuth - tokens were already saved in the callback page
+          console.log('[Settings] Supabase OAuth callback - tokens already saved')
+          setIsLoading(false)
+          sessionStorage.removeItem('calendar_oauth_in_progress')
+          
+          // Check if tokens are in localStorage
+          const savedToken = localStorage.getItem('google_calendar_token')
+          if (savedToken) {
+            setIsConnected(true)
+            setConnectionError(null)
+            toast.success('Successfully connected to Google Calendar!')
+          } else {
+            // Tokens might still be saving, check again after a short delay
+            setTimeout(() => {
+              const tokenAfterDelay = localStorage.getItem('google_calendar_token')
+              if (tokenAfterDelay) {
+                setIsConnected(true)
+                setConnectionError(null)
+                toast.success('Successfully connected to Google Calendar!')
+              } else {
+                toast.error('Failed to save calendar tokens. Please try again.')
+              }
+            }, 500)
+          }
+          
+          // Clean URL
+          window.history.replaceState({}, '', '/settings')
+          return
+        }
+        
+        // Legacy direct OAuth flow (with token in URL params)
+        if (token) {
       console.log('[Settings] OAuth callback received:', {
         hasToken: !!token,
         hasRefresh: !!refresh,
@@ -124,7 +158,8 @@ export default function SettingsPage() {
 
       // Clean URL - remove query params to prevent re-triggering
       window.history.replaceState({}, '', '/settings');
-    } else if (urlParams.get('error')) {
+        }
+      } else if (urlParams.get('error')) {
       const error = urlParams.get('error');
       console.error('[Settings] OAuth error:', error);
       toast.error(`Connection failed: ${error}. Please try again.`);
@@ -409,7 +444,7 @@ export default function SettingsPage() {
       window.removeEventListener('focus', handleFocus);
       clearInterval(checkInterval);
     };
-  }, [isLoading]);
+  }, []);
 
   const checkConnectionStatus = async () => {
     try {
@@ -501,105 +536,66 @@ export default function SettingsPage() {
   const handleConnectGoogle = async () => {
     setIsLoading(true);
     setConnectionError(null);
-    // Set OAuth in progress flag
-    sessionStorage.setItem('oauth_in_progress', 'true');
     
-    // Safety timeout: if OAuth takes more than 2 minutes, reset loading
-    const oauthTimeout = setTimeout(() => {
-      const stillInProgress = sessionStorage.getItem('oauth_in_progress');
-      const hasToken = localStorage.getItem('google_calendar_token');
-      if (stillInProgress && !hasToken) {
-        console.log('[Settings] OAuth timeout - resetting loading state');
-        setIsLoading(false);
-        sessionStorage.removeItem('oauth_in_progress');
-        setConnectionError({ 
-          title: 'Connection Timeout', 
-          message: 'OAuth flow took too long. Please try again.' 
-        });
-      }
-    }, 120000); // 2 minutes
-    
-    // Store timeout ID to clear it if OAuth succeeds
-    sessionStorage.setItem('oauth_timeout_id', oauthTimeout.toString());
-
     try {
-      // Detect if we're running in Capacitor
-      const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+      // Use Supabase OAuth for Google Calendar (same as login)
+      // This ensures PKCE is handled correctly
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
       
-      // Generate OAuth URL
-      // Use iOS client ID for Capacitor, web client ID for browser
-      const clientId = isCapacitor
-        ? (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID_IOS || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '')
-        : (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID_WEB || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '');
+      // For web browsers, ALWAYS use web URL (Google doesn't allow custom schemes for web clients)
+      // Default to web URL - only use custom scheme if we're absolutely certain it's a native app
+      // Check if we're in a web browser context
+      const isWebBrowser = typeof window !== 'undefined' && 
+                          (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+                          !(window as any).Capacitor;
       
-      // For native iOS apps, use Google's reversed client ID format
-      // For web apps, we must use HTTPS URLs
-      let redirectUri: string;
-      if (isCapacitor) {
-        // For Capacitor (iOS native app), use Google's reversed client ID format
-        // Format: com.googleusercontent.apps.CLIENT_ID:/oauth2redirect
-        // Extract client ID from the full client ID string
-        const clientIdParts = clientId.split('.apps.googleusercontent.com')[0];
-        const reversedClientId = `com.googleusercontent.apps.${clientIdParts}`;
-        redirectUri = `${reversedClientId}:/oauth2redirect`;
-        
-        // Alternative: You can also use your custom scheme: com.sitrep.app:/oauth2redirect
-        // But Google's format is more standard
-        // redirectUri = 'com.sitrep.app:/oauth2redirect';
-      } else {
-        // For web, use the configured URL or current origin
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-        // For localhost, use HTTP. For production, use HTTPS (required for sensitive scopes)
-        const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
-        const redirectUrl = isLocalhost 
-          ? baseUrl  // Keep HTTP for localhost
-          : (baseUrl.startsWith('https://') ? baseUrl : `https://${baseUrl.replace(/^https?:\/\//, '')}`);  // Force HTTPS for production
-        redirectUri = `${redirectUrl}/api/auth/google/callback`;
-      }
+      // Use web URL for web browsers, custom scheme only for native Capacitor apps
+      // When in doubt, use web URL (safer - Google rejects custom schemes for web clients)
+      const redirectTo = !isWebBrowser && (window as any).Capacitor
+        ? 'com.sitrep.app://auth/callback' 
+        : `${window.location.origin}/auth/callback`;
       
-      // Log the exact configuration being used
-      console.log('[OAuth] Is Capacitor:', isCapacitor);
-      console.log('[OAuth] Client ID type:', isCapacitor ? 'iOS' : 'Web');
-      console.log('[OAuth] Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
-      console.log('[OAuth] Redirect URI:', redirectUri);
-      console.log('[OAuth] Window origin:', window.location.origin);
-      console.log('[OAuth] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
+      console.log('[Calendar OAuth] Initiating Supabase OAuth for Google Calendar');
+      console.log('[Calendar OAuth] Is web browser:', isWebBrowser);
+      console.log('[Calendar OAuth] Has Capacitor object:', !!(window as any).Capacitor);
+      console.log('[Calendar OAuth] Protocol:', typeof window !== 'undefined' ? window.location.protocol : 'N/A');
+      console.log('[Calendar OAuth] User-Agent:', typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A');
+      console.log('[Calendar OAuth] Redirect to:', redirectTo);
+      
+      // Use Supabase OAuth with calendar scope
+      // This will handle PKCE correctly and redirect to /auth/callback
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          scopes: 'email profile https://www.googleapis.com/auth/calendar',
+          // Add query param to indicate this is for calendar connection
+          queryParams: {
+            prompt: 'consent', // Force consent screen to ensure calendar scope is granted
+          },
+        },
+      });
 
-      const scope = 'https://www.googleapis.com/auth/calendar';
-      const responseType = 'code';
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(clientId)}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `response_type=${responseType}&` +
-        `scope=${encodeURIComponent(scope)}&` +
-        `access_type=offline&` +
-        `prompt=consent`;
-
-      if (!clientId) {
-        toast.error('Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env file.');
+      if (error) {
+        console.error('[Calendar OAuth] Error:', error);
+        toast.error('Failed to connect to Google Calendar: ' + error.message);
         setIsLoading(false);
         return;
       }
 
-      // Show the redirect URI to user for debugging
-      console.log('[OAuth Debug] Full auth URL:', authUrl);
-      toast(`Connecting... Redirect URI: ${redirectUri}`, { duration: 5000 });
-
-      // For Capacitor, redirect to OAuth URL
-      // The redirect page will handle opening the app via custom URL scheme
-      if (isCapacitor) {
-        console.log('[OAuth] Opening OAuth in Safari (will redirect back to app)');
-        // Set a flag so we know OAuth is in progress
-        sessionStorage.setItem('oauth_in_progress', 'true');
-        // Open in Safari - the callback page will redirect to the app
-        window.location.href = authUrl;
+      if (data?.url) {
+        console.log('[Calendar OAuth] Redirecting to OAuth URL');
+        // Store flag that this is for calendar connection
+        sessionStorage.setItem('calendar_oauth_in_progress', 'true');
+        window.location.href = data.url;
       } else {
-        // For web, redirect normally
-        window.location.href = authUrl;
+        console.error('[Calendar OAuth] No OAuth URL received');
+        toast.error('Failed to start Google Calendar connection. Please try again.');
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error initiating OAuth:', error);
+    } catch (error: any) {
+      console.error('[Calendar OAuth] Exception:', error);
       toast.error('Failed to connect to Google Calendar. Please try again.');
       setIsLoading(false);
     }
