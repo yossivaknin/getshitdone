@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/utils/supabase/client';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -23,11 +23,8 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // Create browser client for PKCE exchange
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
+        // Use the client utility which now has cookie support for PKCE
+        const supabase = createClient();
 
         // Log PKCE verifier state
         console.log('[PKCE State]', {

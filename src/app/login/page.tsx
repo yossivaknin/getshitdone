@@ -42,10 +42,10 @@ function LoginForm() {
                 try {
                   const { createClient } = await import('@/utils/supabase/client');
                   const supabase = createClient();
-                  console.log('[Login] Initiating client-side Google OAuth (should store PKCE verifier in storage)');
+                  console.log('[Login] Initiating client-side Google OAuth (PKCE verifier will be stored in cookies)');
                   // Choose redirect URL based on environment: use custom scheme for Capacitor, web callback for browser
                   const isCapacitor = typeof window !== 'undefined' && (navigator.userAgent?.includes('Capacitor') || navigator.userAgent?.includes('iPhone') || navigator.userAgent?.includes('iPad'));
-                  const redirectTo = isCapacitor ? 'com.sitrep.app://auth/callback' : `${window.location.origin}/auth/callback`;
+                  const redirectTo = isCapacitor ? 'com.yossivaknin.sitrep://auth/callback' : `${window.location.origin}/auth/callback`;
                   console.log('[Login] Starting OAuth. isCapacitor:', isCapacitor, 'redirectTo:', redirectTo);
 
                   const { data, error } = await supabase.auth.signInWithOAuth({
