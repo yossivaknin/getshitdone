@@ -63,12 +63,24 @@ export function createClient() {
           console.log('[PKCE Store] setAll() called with', cookiesToSet.length, 'items');
           
           cookiesToSet.forEach(({ name, value }) => {
+            const isCodeVerifier = name.includes('auth-token-code-verifier');
+            
+            // Allow empty values for code verifier (used for cleanup), but log it
             if (!value) {
-              console.log('[PKCE Store] Skipping empty value for:', name);
+              if (isCodeVerifier) {
+                console.log('[PKCE Store] Removing code verifier (empty value - expected after token exchange):', name);
+              } else {
+                console.log('[PKCE Store] Skipping empty value for:', name);
+              }
+              
+              // Still remove it from storage
+              if (isCodeVerifier) {
+                try { sessionStorage.removeItem(name); } catch (e) {}
+                try { localStorage.removeItem(name); } catch (e) {}
+                try { document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; } catch (e) {}
+              }
               return;
             }
-            
-            const isCodeVerifier = name.includes('auth-token-code-verifier');
             
             if (isCodeVerifier) {
               console.log('[PKCE Store] 🔑 STORING CODE VERIFIER:', name, 'length:', value.length);

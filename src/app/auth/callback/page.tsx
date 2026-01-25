@@ -115,13 +115,17 @@ export default function AuthCallbackPage() {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Exchange authorization code for session
+        console.log('[OAuth Callback] Calling exchangeCodeForSession with code:', code);
         const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
+        console.log('[OAuth Callback] Exchange response:', { data, error: exchangeError });
+
         if (exchangeError) {
-          console.error('[OAuth Error]', {
+          console.error('[OAuth Error] Exchange failed:', {
             message: exchangeError.message,
             status: exchangeError.status,
             code: exchangeError.code,
+            fullError: JSON.stringify(exchangeError),
           });
           setError(`OAuth error: ${exchangeError.message}`);
           return;
