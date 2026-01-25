@@ -65,19 +65,18 @@ export function createClient() {
           cookiesToSet.forEach(({ name, value }) => {
             const isCodeVerifier = name.includes('auth-token-code-verifier');
             
-            // Allow empty values for code verifier (used for cleanup), but log it
+            // Handle empty values (cleanup/removal signals from Supabase)
             if (!value) {
               if (isCodeVerifier) {
-                console.log('[PKCE Store] Removing code verifier (empty value - expected after token exchange):', name);
+                console.log('[PKCE Store] Supabase requesting cleanup for code verifier:', name);
+                // Don't remove from sessionStorage yet - it might still be needed
+                // Just remove from cookies
+                try { 
+                  document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; 
+                  console.log('[PKCE Store] Cleared from cookies:', name);
+                } catch (e) {}
               } else {
                 console.log('[PKCE Store] Skipping empty value for:', name);
-              }
-              
-              // Still remove it from storage
-              if (isCodeVerifier) {
-                try { sessionStorage.removeItem(name); } catch (e) {}
-                try { localStorage.removeItem(name); } catch (e) {}
-                try { document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; } catch (e) {}
               }
               return;
             }
