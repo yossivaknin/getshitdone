@@ -26,11 +26,93 @@ export default function AuthCallbackPage() {
         // Use the client utility which now has cookie support for PKCE
         const supabase = createClient();
 
-        // Log PKCE verifier state
-        console.log('[PKCE State]', {
-          localStorageVerifier: localStorage.getItem('sb-pkce-verifier'),
-          cookieCheck: document.cookie.includes('sb-pkce-verifier'),
+        // Log PKCE verifier state - check cookies, sessionStorage, and localStorage
+        const cookieString = document.cookie || '';
+        const allCookies = cookieString ? cookieString.split('; ').map(c => {
+          const idx = c.indexOf('=');
+          if (idx > 0) {
+            const name = c.substring(0, idx).trim();
+            const value = c.substring(idx + 1);
+            return { name, hasValue: !!value, valueLength: value?.length || 0 };
+          }
+          return { name: c.trim(), hasValue: false, valueLength: 0 };
+        }) : [];
+        
+        const supabaseCookies = allCookies.filter(c => 
+          c.name.startsWith('sb-') ||
+          c.name.includes('pkce') || 
+          c.name.includes('verifier') || 
+          c.name.includes('code-verifier')
+        );
+        
+        // Check sessionStorage (primary storage for PKCE)
+        // Look specifically for: sb-*-auth-token-code-verifier
+        const sessionStorageKeys: string[] = [];
+        const sessionStorageVerifiers: Record<string, string> = {};
+        let codeVerifierFound = false;
+        try {
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && (
+              key.includes('auth-token-code-verifier') ||
+              key.startsWith('sb-') || 
+              key.includes('pkce') || 
+              key.includes('verifier') || 
+              key.includes('code-verifier')
+            )) {
+              sessionStorageKeys.push(key);
+              const value = sessionStorage.getItem(key);
+              if (value) {
+                sessionStorageVerifiers[key] = value;
+                if (key.includes('auth-token-code-verifier')) {
+                  codeVerifierFound = true;
+                  console.log('[PKCE State] ✅ Found code verifier in sessionStorage:', key, 'value length:', value.length);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // sessionStorage might not be available
+        }
+        
+        // Also check cookies for the code verifier
+        const codeVerifierInCookies = supabaseCookies.find(c => c.name.includes('auth-token-code-verifier'));
+        if (codeVerifierInCookies) {
+          console.log('[PKCE State] ✅ Found code verifier in cookies:', codeVerifierInCookies.name);
+        }
+        
+        // Check localStorage as fallback
+        let localStorageVerifier = null;
+        try {
+          localStorageVerifier = localStorage.getItem('sb-pkce-verifier');
+        } catch (e) {
+          // localStorage might not be available
+        }
+        
+        console.log('[PKCE State] Before exchange:', {
+          hasCookieString: !!cookieString,
+          cookieStringLength: cookieString.length,
+          allCookieNames: allCookies.map(c => c.name),
+          supabaseCookies: supabaseCookies.map(c => ({
+            name: c.name,
+            hasValue: c.hasValue,
+            valueLength: c.valueLength,
+          })),
+          codeVerifierFound: codeVerifierFound || !!codeVerifierInCookies,
+          sessionStorageKeys,
+          sessionStorageVerifiers: Object.keys(sessionStorageVerifiers),
+          localStorageVerifier: localStorageVerifier ? 'present' : 'missing',
+          fullCookieString: cookieString,
         });
+        
+        // If code verifier is not found, log a detailed error
+        if (!codeVerifierFound && !codeVerifierInCookies) {
+          console.error('[PKCE State] ❌ Code verifier NOT FOUND in any storage!');
+          console.error('[PKCE State] This will cause the exchange to fail.');
+        }
+
+        // Small delay to ensure cookies are fully available (especially after redirect)
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Exchange authorization code for session
         const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);

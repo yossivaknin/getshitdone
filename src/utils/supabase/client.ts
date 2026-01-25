@@ -4,14 +4,7 @@ export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Log for debugging (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Supabase Client] Initializing with cookie support for PKCE...', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseAnonKey,
-      urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing',
-    });
-  }
+  console.log('[Supabase Client] Initializing browser client for OAuth with PKCE...');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     const missing = [];
@@ -23,46 +16,102 @@ export function createClient() {
   }
 
   try {
-    // Create browser client with cookies enabled for PKCE verifier persistence
+    // Create browser client with proper cookie configuration for PKCE
     const client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
-          return document.cookie.split('; ').reduce((acc, cookie) => {
-            const [name, value] = cookie.split('=');
-            if (name) acc.push({ name, value: decodeURIComponent(value) });
-            return acc;
-          }, [] as Array<{ name: string; value: string }>);
+          console.log('[PKCE Store] getAll() called - checking sessionStorage and cookies');
+          const cookies: Array<{ name: string; value: string }> = [];
+          
+          // Check sessionStorage first (primary source for PKCE)
+          try {
+            for (let i = 0; i < sessionStorage.length; i++) {
+              const key = sessionStorage.key(i);
+              if (key && key.includes('auth-token-code-verifier')) {
+                const value = sessionStorage.getItem(key);
+                if (value) {
+                  cookies.push({ name: key, value });
+                  console.log('[PKCE Store] ✅ Found PKCE verifier in sessionStorage:', key);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[PKCE Store] Could not read sessionStorage:', e);
+          }
+          
+          // Also check cookies
+          if (document.cookie) {
+            document.cookie.split('; ').forEach(cookie => {
+              const idx = cookie.indexOf('=');
+              if (idx > 0) {
+                const name = cookie.substring(0, idx).trim();
+                const value = cookie.substring(idx + 1);
+                if (name.includes('auth-token-code-verifier') || name.startsWith('sb-')) {
+                  try {
+                    cookies.push({ name, value: decodeURIComponent(value) });
+                  } catch (e) {
+                    cookies.push({ name, value });
+                  }
+                }
+              }
+            });
+          }
+          
+          return cookies;
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            const str = `${name}=${encodeURIComponent(value)}`;
-            const expStr = options?.maxAge 
-              ? `; Max-Age=${options.maxAge}`
-              : options?.expires
-              ? `; expires=${new Date(options.expires).toUTCString()}`
-              : '';
-            const pathStr = options?.path ? `; path=${options.path}` : '';
-            const domainStr = options?.domain ? `; domain=${options.domain}` : '';
-            const secureStr = options?.secure ? '; secure' : '';
-            const sameSiteStr = options?.sameSite ? `; samesite=${options.sameSite}` : '';
-            document.cookie = str + expStr + pathStr + domainStr + secureStr + sameSiteStr;
+          console.log('[PKCE Store] setAll() called with', cookiesToSet.length, 'items');
+          
+          cookiesToSet.forEach(({ name, value }) => {
+            if (!value) {
+              console.log('[PKCE Store] Skipping empty value for:', name);
+              return;
+            }
+            
+            const isCodeVerifier = name.includes('auth-token-code-verifier');
+            
+            if (isCodeVerifier) {
+              console.log('[PKCE Store] 🔑 STORING CODE VERIFIER:', name, 'length:', value.length);
+            }
+            
+            // Priority 1: sessionStorage (most reliable for PKCE across redirects)
+            try {
+              sessionStorage.setItem(name, value);
+              console.log('[PKCE Store] ✅ Saved to sessionStorage:', name);
+            } catch (e) {
+              console.warn('[PKCE Store] Failed to save to sessionStorage:', name, e);
+            }
+            
+            // Priority 2: localStorage as backup
+            try {
+              localStorage.setItem(name, value);
+              console.log('[PKCE Store] ✅ Saved to localStorage:', name);
+            } catch (e) {
+              console.warn('[PKCE Store] Failed to save to localStorage:', name, e);
+            }
+            
+            // Priority 3: cookies as last resort
+            try {
+              const encodedValue = encodeURIComponent(value);
+              const isSecure = window.location.protocol === 'https:' && !window.location.hostname.includes('localhost');
+              const sameSite = 'lax';
+              const maxAge = 600; // 10 minutes for PKCE
+              
+              const cookieStr = `${name}=${encodedValue};max-age=${maxAge};path=/;samesite=${sameSite}${isSecure ? ';secure' : ''}`;
+              document.cookie = cookieStr;
+              console.log('[PKCE Store] ✅ Saved to cookies:', name);
+            } catch (e) {
+              console.warn('[PKCE Store] Failed to save to cookies:', name, e);
+            }
           });
         },
       },
     });
     
-    // Test connection in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Supabase Client] ✅ Client created successfully');
-    }
-    
+    console.log('[Supabase Client] ✅ Client created successfully');
     return client;
   } catch (error: any) {
-    console.error('[Supabase Client] ❌ Error creating client:', {
-      error: error,
-      errorMessage: error?.message,
-      errorStack: error?.stack,
-    });
+    console.error('[Supabase Client] ❌ Error creating client:', error?.message);
     throw error;
   }
 }

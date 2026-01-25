@@ -48,9 +48,17 @@ function LoginForm() {
                   const redirectTo = isCapacitor ? 'com.yossivaknin.sitrep://auth/callback' : `${window.location.origin}/auth/callback`;
                   console.log('[Login] Starting OAuth. isCapacitor:', isCapacitor, 'redirectTo:', redirectTo);
 
+                  // Log cookies before OAuth
+                  console.log('[Login] Cookies before OAuth:', document.cookie);
+                  
                   const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
-                    options: { redirectTo, scopes: 'email profile https://www.googleapis.com/auth/calendar' },
+                    options: { 
+                      redirectTo, 
+                      scopes: 'email profile https://www.googleapis.com/auth/calendar',
+                      // Ensure PKCE is used (default, but explicit is better)
+                      skipBrowserRedirect: false,
+                    },
                   });
 
                   if (error) {
@@ -61,7 +69,69 @@ function LoginForm() {
                   }
 
                   if (data?.url) {
+                    // Wait a bit for Supabase to set the PKCE cookie
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
+                    // Verify PKCE cookie is set before redirecting
+                    const cookiesAfterOAuth = document.cookie;
+                    const allCookies = cookiesAfterOAuth.split('; ').map(c => {
+                      const idx = c.indexOf('=');
+                      if (idx > 0) {
+                        const name = c.substring(0, idx).trim();
+                        const value = c.substring(idx + 1);
+                        return { name, value, hasValue: !!value && value.length > 0 };
+                      }
+                      return { name: c.trim(), value: '', hasValue: false };
+                    });
+                    
+                    const supabaseCookies = allCookies.filter(c => 
+                      c.name.startsWith('sb-') || 
+                      c.name.includes('pkce') || 
+                      c.name.includes('verifier') ||
+                      c.name.includes('code-verifier')
+                    );
+                    
+                    const codeVerifierCookie = supabaseCookies.find(c => c.name.includes('auth-token-code-verifier'));
+                    
+                    // Check sessionStorage too
+                    let sessionStorageVerifier = null;
+                    try {
+                      for (let i = 0; i < sessionStorage.length; i++) {
+                        const key = sessionStorage.key(i);
+                        if (key && key.includes('auth-token-code-verifier')) {
+                          sessionStorageVerifier = sessionStorage.getItem(key);
+                          break;
+                        }
+                      }
+                    } catch (e) {}
+                    
+                    console.log('[Login] OAuth URL received, checking storage:', {
+                      allCookies: allCookies.map(c => ({ name: c.name, hasValue: c.hasValue, valueLength: c.value?.length || 0 })),
+                      supabaseCookies: supabaseCookies.map(c => ({ name: c.name, hasValue: c.hasValue, valueLength: c.value?.length || 0 })),
+                      codeVerifierCookie: codeVerifierCookie ? {
+                        name: codeVerifierCookie.name,
+                        hasValue: codeVerifierCookie.hasValue,
+                        valueLength: codeVerifierCookie.value?.length || 0,
+                      } : null,
+                      sessionStorageVerifier: sessionStorageVerifier ? {
+                        hasValue: true,
+                        valueLength: sessionStorageVerifier.length,
+                      } : null,
+                      cookieString: cookiesAfterOAuth,
+                    });
+                    
+                    // Warn if code verifier is missing or empty
+                    if (!codeVerifierCookie?.hasValue && !sessionStorageVerifier) {
+                      console.error('[Login] ⚠️ Code verifier cookie is missing or empty! This will cause OAuth to fail.');
+                    } else if (codeVerifierCookie && !codeVerifierCookie.hasValue && sessionStorageVerifier) {
+                      console.warn('[Login] ⚠️ Code verifier cookie is empty, but found in sessionStorage. This should still work.');
+                    }
+                    
+                    // Additional delay to ensure cookie is fully persisted
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
                     // Navigate to the OAuth URL (this should open Safari and preserve PKCE in this WebView)
+                    console.log('[Login] Redirecting to OAuth URL');
                     window.location.href = data.url;
                     return;
                   }
