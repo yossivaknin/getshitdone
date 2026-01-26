@@ -128,21 +128,25 @@ export default function AuthCallbackPage() {
             fullError: JSON.stringify(exchangeError),
           });
           setError(`OAuth error: ${exchangeError.message}`);
+          setLoading(false);
           return;
         }
 
         if (data?.session) {
           console.log('[OAuth Success] Session established for user:', data.session.user.id);
-          // Redirect to settings or home
-          router.replace('/settings');
+          console.log('[OAuth Callback] Redirecting to /app...');
+          // Redirect to app - don't set loading to false, let redirect happen
+          router.replace('/app');
+          // Keep loading state true to show "Completing sign in" until redirect
         } else {
+          console.error('[OAuth Error] No session in response');
           setError('No session returned from OAuth provider');
+          setLoading(false);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         console.error('[OAuth Exception]', errorMessage);
         setError(errorMessage);
-      } finally {
         setLoading(false);
       }
     };
