@@ -7,6 +7,35 @@ import { redirect } from 'next/navigation'
 export async function logout() {
   const supabase = createClient()
   await supabase.auth.signOut()
+  
+  // Clear PKCE and Supabase cookies from the browser (if called from client action)
+  if (typeof document !== 'undefined') {
+    // Delete all Supabase-related cookies
+    const cookiesToDelete = [
+      'sb-pkce-verifier',
+      'sb-xuwovziafkjdjgxrlgsb-auth-token',
+      'sb-xuwovziafkjdjgxrlgsb-auth-token-code-verifier',
+    ];
+    
+    // Also delete any cookie that starts with 'sb-'
+    if (document.cookie) {
+      document.cookie.split('; ').forEach(cookie => {
+        const name = cookie.split('=')[0].trim();
+        if (name.startsWith('sb-') || name.includes('auth-token')) {
+          cookiesToDelete.push(name);
+        }
+      });
+    }
+    
+    // Delete each cookie properly
+    cookiesToDelete.forEach(name => {
+      document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT;samesite=lax`;
+    });
+    
+    // Also clear from storage
+    try { sessionStorage.clear(); } catch (e) {}
+  }
+  
   revalidatePath('/app', 'layout')
   redirect('/login')
 }

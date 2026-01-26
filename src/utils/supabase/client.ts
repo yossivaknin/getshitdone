@@ -39,14 +39,15 @@ export function createClient() {
             console.warn('[PKCE Store] Could not read sessionStorage:', e);
           }
           
-          // Also check cookies
+          // Also check cookies, but skip empty values
           if (document.cookie) {
             document.cookie.split('; ').forEach(cookie => {
               const idx = cookie.indexOf('=');
               if (idx > 0) {
                 const name = cookie.substring(0, idx).trim();
                 const value = cookie.substring(idx + 1);
-                if (name.includes('auth-token-code-verifier') || name.startsWith('sb-')) {
+                // Only include cookies with non-empty values (skip cleared cookies)
+                if (value && (name.includes('auth-token-code-verifier') || name.startsWith('sb-'))) {
                   try {
                     cookies.push({ name, value: decodeURIComponent(value) });
                   } catch (e) {
