@@ -23,15 +23,23 @@ export function createClient() {
           console.log('[PKCE Store] getAll() called - checking sessionStorage and cookies');
           const cookies: Array<{ name: string; value: string }> = [];
           
-          // Check sessionStorage first (primary source for PKCE)
+          // Check sessionStorage first (primary source for PKCE and state)
           try {
             for (let i = 0; i < sessionStorage.length; i++) {
               const key = sessionStorage.key(i);
-              if (key && key.includes('auth-token-code-verifier')) {
+              if (key && (
+                key.includes('auth-token-code-verifier') ||
+                key.includes('auth-token-state') ||
+                key.includes('flow-state')
+              )) {
                 const value = sessionStorage.getItem(key);
                 if (value) {
                   cookies.push({ name: key, value });
-                  console.log('[PKCE Store] ✅ Found PKCE verifier in sessionStorage:', key);
+                  if (key.includes('code-verifier')) {
+                    console.log('[PKCE Store] ✅ Found PKCE verifier in sessionStorage:', key);
+                  } else if (key.includes('state')) {
+                    console.log('[PKCE Store] ✅ Found OAuth state in sessionStorage:', key);
+                  }
                 }
               }
             }
@@ -47,7 +55,13 @@ export function createClient() {
                 const name = cookie.substring(0, idx).trim();
                 const value = cookie.substring(idx + 1);
                 // Only include cookies with non-empty values (skip cleared cookies)
-                if (value && (name.includes('auth-token-code-verifier') || name.startsWith('sb-'))) {
+                // Include PKCE verifier, state, and all sb- prefixed cookies
+                if (value && (
+                  name.includes('auth-token-code-verifier') ||
+                  name.includes('auth-token-state') ||
+                  name.includes('flow-state') ||
+                  name.startsWith('sb-')
+                )) {
                   try {
                     cookies.push({ name, value: decodeURIComponent(value) });
                   } catch (e) {
@@ -65,11 +79,12 @@ export function createClient() {
           
           cookiesToSet.forEach(({ name, value }) => {
             const isCodeVerifier = name.includes('auth-token-code-verifier');
+            const isState = name.includes('auth-token-state') || name.includes('flow-state') || name.includes('state');
             
             // Handle empty values (cleanup/removal signals from Supabase)
             if (!value) {
-              if (isCodeVerifier) {
-                console.log('[PKCE Store] Supabase requesting cleanup for code verifier:', name);
+              if (isCodeVerifier || isState) {
+                console.log('[PKCE Store] Supabase requesting cleanup for:', name);
                 // Don't remove from sessionStorage yet - it might still be needed
                 // Just remove from cookies
                 try { 
@@ -84,9 +99,11 @@ export function createClient() {
             
             if (isCodeVerifier) {
               console.log('[PKCE Store] 🔑 STORING CODE VERIFIER:', name, 'length:', value.length);
+            } else if (isState) {
+              console.log('[PKCE Store] 🔐 STORING OAUTH STATE:', name, 'length:', value.length);
             }
             
-            // Priority 1: sessionStorage (most reliable for PKCE across redirects)
+            // Priority 1: sessionStorage (most reliable for PKCE and state across redirects)
             try {
               sessionStorage.setItem(name, value);
               console.log('[PKCE Store] ✅ Saved to sessionStorage:', name);
@@ -107,7 +124,7 @@ export function createClient() {
               const encodedValue = encodeURIComponent(value);
               const isSecure = window.location.protocol === 'https:' && !window.location.hostname.includes('localhost');
               const sameSite = 'lax';
-              const maxAge = 600; // 10 minutes for PKCE
+              const maxAge = 600; // 10 minutes for PKCE and state
               
               const cookieStr = `${name}=${encodedValue};max-age=${maxAge};path=/;samesite=${sameSite}${isSecure ? ';secure' : ''}`;
               document.cookie = cookieStr;
