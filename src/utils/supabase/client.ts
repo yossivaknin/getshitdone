@@ -36,6 +36,24 @@ export function createClient() {
             // sessionStorage might not be available
           }
           
+          // Check localStorage (important for Capacitor/mobile where sessionStorage may not persist)
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('sb-')) {
+                const value = localStorage.getItem(key);
+                if (value) {
+                  const existing = cookies.find(c => c.name === key);
+                  if (!existing) {
+                    cookies.push({ name: key, value });
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // localStorage might not be available
+          }
+          
           // Also check cookies, but skip empty values
           if (document.cookie) {
             document.cookie.split('; ').forEach(cookie => {
