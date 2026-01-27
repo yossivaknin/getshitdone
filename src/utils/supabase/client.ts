@@ -24,21 +24,24 @@ export function createClient() {
           const cookies: Array<{ name: string; value: string }> = [];
           
           // Check sessionStorage first (primary source for PKCE and state)
+          // Return ALL Supabase-related keys (sb-* prefix) to ensure we don't miss anything
           try {
             for (let i = 0; i < sessionStorage.length; i++) {
               const key = sessionStorage.key(i);
-              if (key && (
-                key.includes('auth-token-code-verifier') ||
-                key.includes('auth-token-state') ||
-                key.includes('flow-state')
-              )) {
+              if (key && key.startsWith('sb-')) {
                 const value = sessionStorage.getItem(key);
                 if (value) {
-                  cookies.push({ name: key, value });
-                  if (key.includes('code-verifier')) {
-                    console.log('[PKCE Store] ✅ Found PKCE verifier in sessionStorage:', key);
-                  } else if (key.includes('state')) {
-                    console.log('[PKCE Store] ✅ Found OAuth state in sessionStorage:', key);
+                  // Check if we already have this cookie (avoid duplicates)
+                  const existing = cookies.find(c => c.name === key);
+                  if (!existing) {
+                    cookies.push({ name: key, value });
+                    if (key.includes('code-verifier')) {
+                      console.log('[PKCE Store] ✅ Found PKCE verifier in sessionStorage:', key);
+                    } else if (key.includes('state')) {
+                      console.log('[PKCE Store] ✅ Found OAuth state in sessionStorage:', key);
+                    } else {
+                      console.log('[PKCE Store] Found Supabase cookie in sessionStorage:', key);
+                    }
                   }
                 }
               }
@@ -48,29 +51,42 @@ export function createClient() {
           }
           
           // Also check cookies, but skip empty values
+          // Return ALL sb-* cookies to ensure we capture state, verifier, and any other auth cookies
           if (document.cookie) {
             document.cookie.split('; ').forEach(cookie => {
               const idx = cookie.indexOf('=');
               if (idx > 0) {
                 const name = cookie.substring(0, idx).trim();
                 const value = cookie.substring(idx + 1);
-                // Only include cookies with non-empty values (skip cleared cookies)
-                // Include PKCE verifier, state, and all sb- prefixed cookies
-                if (value && (
-                  name.includes('auth-token-code-verifier') ||
-                  name.includes('auth-token-state') ||
-                  name.includes('flow-state') ||
-                  name.startsWith('sb-')
-                )) {
-                  try {
-                    cookies.push({ name, value: decodeURIComponent(value) });
-                  } catch (e) {
-                    cookies.push({ name, value });
+                // Include ALL Supabase cookies (sb- prefix) with non-empty values
+                if (value && name.startsWith('sb-')) {
+                  // Check if we already have this from sessionStorage
+                  const existing = cookies.find(c => c.name === name);
+                  if (!existing) {
+                    try {
+                      cookies.push({ name, value: decodeURIComponent(value) });
+                      if (name.includes('code-verifier')) {
+                        console.log('[PKCE Store] ✅ Found PKCE verifier in cookies:', name);
+                      } else if (name.includes('state')) {
+                        console.log('[PKCE Store] ✅ Found OAuth state in cookies:', name);
+                      }
+                    } catch (e) {
+                      cookies.push({ name, value });
+                    }
                   }
                 }
               }
             });
           }
+          
+          // Log summary
+          const codeVerifier = cookies.find(c => c.name.includes('code-verifier'));
+          const state = cookies.find(c => c.name.includes('state'));
+          console.log('[PKCE Store] getAll() returning', cookies.length, 'cookies:', {
+            hasCodeVerifier: !!codeVerifier,
+            hasState: !!state,
+            allCookieNames: cookies.map(c => c.name),
+          });
           
           return cookies;
         },
@@ -78,8 +94,13 @@ export function createClient() {
           console.log('[PKCE Store] setAll() called with', cookiesToSet.length, 'items');
           
           cookiesToSet.forEach(({ name, value }) => {
-            const isCodeVerifier = name.includes('auth-token-code-verifier');
-            const isState = name.includes('auth-token-state') || name.includes('flow-state') || name.includes('state');
+            // Only process Supabase cookies (sb- prefix)
+            if (!name.startsWith('sb-')) {
+              return;
+            }
+            
+            const isCodeVerifier = name.includes('code-verifier');
+            const isState = name.includes('state');
             
             // Handle empty values (cleanup/removal signals from Supabase)
             if (!value) {
@@ -101,6 +122,8 @@ export function createClient() {
               console.log('[PKCE Store] 🔑 STORING CODE VERIFIER:', name, 'length:', value.length);
             } else if (isState) {
               console.log('[PKCE Store] 🔐 STORING OAUTH STATE:', name, 'length:', value.length);
+            } else {
+              console.log('[PKCE Store] 📦 STORING Supabase cookie:', name, 'length:', value.length);
             }
             
             // Priority 1: sessionStorage (most reliable for PKCE and state across redirects)
