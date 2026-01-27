@@ -1,0 +1,54 @@
+appId: com.yossivaknin.sitrep
+productName: SITREP
+copyright: Copyright © 2025
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - electron/main.js
+  - package.json
+  - package-lock.json
+  # Exclude unnecessary files
+  - "!node_modules/**/*"
+  - "!src/**/*"
+  - "!.next/**/*"
+  - "!ios/**/*"
+  - "!android/**/*"
+  - "!**/*.{md,ts,tsx,jsx,json.map}"
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.icns
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: ${productName} ${version}
+  icon: build/icon.icns
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+win:
+  target: nsis
+  icon: build/icon.ico
+
+linux:
+  target: AppImage
+  category: Utility
+

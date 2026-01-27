@@ -9,9 +9,9 @@ function LoginForm() {
       className="min-h-screen bg-[#0F0F0F] text-white flex items-center justify-center p-4 safe-top" 
       style={{ paddingTop: `calc(1rem + env(safe-area-inset-top))` }}
     >
-      {/* DEBUG: Build time - 2026-01-09 21:24:35 */}
-      <div className="fixed top-16 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs font-mono z-50">
-        Build: 2026-01-09 21:24:35
+      {/* DEBUG: Build time - 2026-01-27 10:12:46 MOBILE-FIX-V2 */}
+      <div className="fixed top-16 right-4 bg-red-600 text-white px-3 py-2 rounded text-xs font-mono z-50 border-2 border-yellow-400">
+        Build: 2026-01-27 10:12:46 MOBILE-FIX-V2
       </div>
       <div className="w-full max-w-md">
         {/* Logo/Brand Section */}

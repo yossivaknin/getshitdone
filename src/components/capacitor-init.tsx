@@ -312,6 +312,28 @@ export function CapacitorInit() {
 
               try {
                 const { createClient } = await import('@/utils/supabase/client');
+                
+                // Check for PKCE verifier before creating client
+                let pkceFound = false;
+                try {
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('sb-') && key.includes('code-verifier')) {
+                      const value = localStorage.getItem(key);
+                      if (value) {
+                        pkceFound = true;
+                        logToXcode('log', '[Capacitor] ✅ PKCE verifier found in localStorage before exchange:', key.substring(0, 30) + '...');
+                        break;
+                      }
+                    }
+                  }
+                  if (!pkceFound) {
+                    logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier NOT found in localStorage before exchange');
+                  }
+                } catch (e) {
+                  logToXcode('warn', '[Capacitor] Could not check localStorage for PKCE:', String(e));
+                }
+                
                 const supabase = createClient();
 
                 logToXcode('log', '[Capacitor] Supabase client created, exchanging code for session...');

@@ -38,6 +38,7 @@ export function createClient() {
           
           // Check localStorage (important for Capacitor/mobile where sessionStorage may not persist)
           try {
+            let foundInLocalStorage = 0;
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
               if (key && key.startsWith('sb-')) {
@@ -46,12 +47,20 @@ export function createClient() {
                   const existing = cookies.find(c => c.name === key);
                   if (!existing) {
                     cookies.push({ name: key, value });
+                    foundInLocalStorage++;
+                    // Log PKCE verifier specifically for debugging
+                    if (key.includes('code-verifier')) {
+                      console.log('[Supabase Client] ✅ Found PKCE verifier in localStorage:', key.substring(0, 30) + '...');
+                    }
                   }
                 }
               }
             }
+            if (foundInLocalStorage > 0) {
+              console.log(`[Supabase Client] Found ${foundInLocalStorage} Supabase items in localStorage`);
+            }
           } catch (e) {
-            // localStorage might not be available
+            console.warn('[Supabase Client] localStorage check failed:', e);
           }
           
           // Also check cookies, but skip empty values
