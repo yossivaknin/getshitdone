@@ -47,6 +47,8 @@ function LoginForm() {
                   const isCapacitor = typeof window !== 'undefined' && (navigator.userAgent?.includes('Capacitor') || navigator.userAgent?.includes('iPhone') || navigator.userAgent?.includes('iPad'));
                   const redirectTo = isCapacitor ? 'com.yossivaknin.sitrep://auth/callback' : `${window.location.origin}/auth/callback`;
                   
+                  console.log('[Login] Starting OAuth, redirectTo:', redirectTo, 'isCapacitor:', isCapacitor);
+                  
                   const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: { 
@@ -57,13 +59,39 @@ function LoginForm() {
                   });
 
                   if (error) {
+                    console.error('[Login] OAuth error:', error);
                     window.location.href = '/login?message=' + encodeURIComponent('Google sign-in failed: ' + error.message);
                     return;
                   }
 
                   if (data?.url) {
-                    // Small delay to ensure PKCE verifier is stored
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Wait a bit longer and verify PKCE verifier was stored
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    // Verify PKCE verifier is in localStorage (critical for mobile)
+                    let pkceFound = false;
+                    try {
+                      for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith('sb-') && key.includes('code-verifier')) {
+                          const value = localStorage.getItem(key);
+                          if (value && value.length > 0) {
+                            pkceFound = true;
+                            console.log('[Login] ✅ PKCE verifier confirmed in localStorage:', key.substring(0, 30) + '...');
+                            break;
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('[Login] Could not check localStorage:', e);
+                    }
+                    
+                    if (!pkceFound && isCapacitor) {
+                      console.error('[Login] ⚠️ PKCE verifier NOT found in localStorage before redirect! This will cause OAuth to fail.');
+                      // Still proceed - maybe it's stored in sessionStorage or cookies
+                    }
+                    
+                    console.log('[Login] Redirecting to OAuth URL...');
                     window.location.href = data.url;
                     return;
                   }
@@ -71,7 +99,7 @@ function LoginForm() {
                   // If no URL returned, show an error
                   window.location.href = '/login?message=' + encodeURIComponent('Google OAuth failed to start.');
                 } catch (err: any) {
-                  console.error('Exception starting client-side Google OAuth', err);
+                  console.error('[Login] Exception starting client-side Google OAuth', err);
                   window.location.href = '/login?message=' + encodeURIComponent('Google sign-in exception: ' + (err?.message || String(err)));
                 }
               }}

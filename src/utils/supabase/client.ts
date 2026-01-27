@@ -85,6 +85,25 @@ export function createClient() {
             });
           }
           
+          // Log summary for debugging
+          const codeVerifierCookies = cookies.filter(c => c.name.includes('code-verifier'));
+          if (codeVerifierCookies.length > 0) {
+            console.log(`[Supabase Client] getAll() found ${codeVerifierCookies.length} PKCE verifier(s) from:`, {
+              sessionStorage: codeVerifierCookies.some(c => {
+                try {
+                  return sessionStorage.getItem(c.name) === c.value;
+                } catch { return false; }
+              }),
+              localStorage: codeVerifierCookies.some(c => {
+                try {
+                  return localStorage.getItem(c.name) === c.value;
+                } catch { return false; }
+              }),
+            });
+          } else {
+            console.warn('[Supabase Client] getAll() found NO PKCE verifier cookies!');
+          }
+          
           return cookies;
         },
         setAll(cookiesToSet) {
@@ -111,15 +130,21 @@ export function createClient() {
             // Priority 1: sessionStorage (most reliable for PKCE and state across redirects)
             try {
               sessionStorage.setItem(name, value);
+              if (isCodeVerifier) {
+                console.log('[Supabase Client] ✅ Stored PKCE verifier in sessionStorage:', name.substring(0, 30) + '...');
+              }
             } catch (e) {
-              // sessionStorage might not be available
+              console.warn('[Supabase Client] Failed to store in sessionStorage:', e);
             }
             
-            // Priority 2: localStorage as backup
+            // Priority 2: localStorage as backup (CRITICAL for Capacitor/mobile)
             try {
               localStorage.setItem(name, value);
+              if (isCodeVerifier) {
+                console.log('[Supabase Client] ✅ Stored PKCE verifier in localStorage:', name.substring(0, 30) + '...');
+              }
             } catch (e) {
-              // localStorage might not be available
+              console.warn('[Supabase Client] Failed to store in localStorage:', e);
             }
             
             // Priority 3: cookies as last resort
