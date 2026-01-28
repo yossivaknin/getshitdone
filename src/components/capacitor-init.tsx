@@ -313,22 +313,36 @@ export function CapacitorInit() {
               try {
                 const { createClient } = await import('@/utils/supabase/client');
                 
-                // Check for PKCE verifier before creating client
+                // Check for PKCE verifier before creating client - COMPREHENSIVE CHECK
                 let pkceFound = false;
+                let allSupabaseKeys: string[] = [];
                 try {
+                  // First, dump ALL localStorage keys for debugging
+                  logToXcode('log', '[Capacitor] Checking localStorage (total items:', localStorage.length, ')');
+                  
                   for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key && key.startsWith('sb-') && key.includes('code-verifier')) {
-                      const value = localStorage.getItem(key);
-                      if (value) {
-                        pkceFound = true;
-                        logToXcode('log', '[Capacitor] ✅ PKCE verifier found in localStorage before exchange:', key.substring(0, 30) + '...');
-                        break;
+                    if (key) {
+                      if (key.startsWith('sb-')) {
+                        allSupabaseKeys.push(key);
+                        const value = localStorage.getItem(key);
+                        if (key.includes('code-verifier')) {
+                          if (value && value.length > 0) {
+                            pkceFound = true;
+                            logToXcode('log', '[Capacitor] ✅ PKCE verifier found in localStorage:', key, 'value length:', value.length);
+                          } else {
+                            logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier key exists but value is empty:', key);
+                          }
+                        }
                       }
                     }
                   }
+                  
+                  logToXcode('log', '[Capacitor] All Supabase keys in localStorage:', allSupabaseKeys.join(', '));
+                  
                   if (!pkceFound) {
                     logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier NOT found in localStorage before exchange');
+                    logToXcode('warn', '[Capacitor] Available Supabase keys:', allSupabaseKeys.length > 0 ? allSupabaseKeys.join(', ') : 'NONE');
                   }
                 } catch (e) {
                   logToXcode('warn', '[Capacitor] Could not check localStorage for PKCE:', String(e));

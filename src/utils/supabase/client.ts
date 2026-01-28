@@ -88,20 +88,33 @@ export function createClient() {
           // Log summary for debugging
           const codeVerifierCookies = cookies.filter(c => c.name.includes('code-verifier'));
           if (codeVerifierCookies.length > 0) {
-            console.log(`[Supabase Client] getAll() found ${codeVerifierCookies.length} PKCE verifier(s) from:`, {
-              sessionStorage: codeVerifierCookies.some(c => {
-                try {
-                  return sessionStorage.getItem(c.name) === c.value;
-                } catch { return false; }
-              }),
-              localStorage: codeVerifierCookies.some(c => {
-                try {
-                  return localStorage.getItem(c.name) === c.value;
-                } catch { return false; }
-              }),
-            });
+            console.log(`[Supabase Client] getAll() found ${codeVerifierCookies.length} PKCE verifier(s):`, codeVerifierCookies.map(c => ({
+              name: c.name.substring(0, 40) + '...',
+              valueLength: c.value.length,
+              fromSessionStorage: (() => {
+                try { return sessionStorage.getItem(c.name) === c.value; } catch { return false; }
+              })(),
+              fromLocalStorage: (() => {
+                try { return localStorage.getItem(c.name) === c.value; } catch { return false; }
+              })(),
+            })));
           } else {
             console.warn('[Supabase Client] getAll() found NO PKCE verifier cookies!');
+            // Dump all Supabase keys for debugging
+            try {
+              const allSbKeys: string[] = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('sb-')) allSbKeys.push(key);
+              }
+              for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                if (key && key.startsWith('sb-') && !allSbKeys.includes(key)) allSbKeys.push(key);
+              }
+              console.warn('[Supabase Client] Available Supabase keys in storage:', allSbKeys.length > 0 ? allSbKeys.join(', ') : 'NONE');
+            } catch (e) {
+              console.warn('[Supabase Client] Could not dump storage keys:', e);
+            }
           }
           
           return cookies;
