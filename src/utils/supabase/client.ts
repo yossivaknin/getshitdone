@@ -143,15 +143,21 @@ export function createClient() {
             const valuePreview = value ? (value.length > 40 ? value.substring(0, 40) + '...' : value) : '(empty)';
             console.log(`[Supabase Client] setAll name="${name}" value=${valuePreview} length=${value?.length ?? 0}`);
 
-            const isCodeVerifier = name.includes('code-verifier');
-            const isState = name.includes('state');
+            const removeEverywhere = (key: string) => {
+              try {
+                sessionStorage.removeItem(key);
+              } catch (e) {}
+              try {
+                localStorage.removeItem(key);
+              } catch (e) {}
+              try {
+                document.cookie = `${key}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+              } catch (e) {}
+              console.log(`[Supabase Client] setAll removed from all storage: ${key}`);
+            };
 
-            if (!value) {
-              if (isCodeVerifier || isState) {
-                try {
-                  document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-                } catch (e) {}
-              }
+            if (!value || value.length === 0) {
+              removeEverywhere(name);
               return;
             }
 
