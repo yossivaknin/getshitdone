@@ -313,57 +313,46 @@ export function CapacitorInit() {
               try {
                 const { createClient } = await import('@/utils/supabase/client');
                 
-                // Check for PKCE verifier before creating client - COMPREHENSIVE CHECK
+                // ALWAYS restore from backup first when available (handles cold start / different storage context)
+                const backupKey = localStorage.getItem('sitrep-pkce-verifier-key');
+                const backupValue = localStorage.getItem('sitrep-pkce-verifier-value');
+                if (backupKey && backupValue && backupKey.startsWith('sb-') && backupKey.includes('code-verifier')) {
+                  try {
+                    sessionStorage.setItem(backupKey, backupValue);
+                    localStorage.setItem(backupKey, backupValue);
+                    try {
+                      const encoded = encodeURIComponent(backupValue);
+                      const isSecure = typeof window !== 'undefined' && window.location?.protocol === 'https:' && !window.location?.hostname?.includes('localhost');
+                      document.cookie = `${backupKey}=${encoded};max-age=600;path=/;samesite=lax${isSecure ? ';secure' : ''}`;
+                    } catch (_) {}
+                    logToXcode('log', '[Capacitor] ✅ Restored PKCE verifier from backup before exchange');
+                    await new Promise((r) => setTimeout(r, 150));
+                  } catch (e) {
+                    logToXcode('warn', '[Capacitor] Could not restore PKCE from backup:', String(e));
+                  }
+                } else {
+                  logToXcode('log', '[Capacitor] No backup (sitrep-pkce-verifier-*), relying on existing storage');
+                }
+                
                 let pkceFound = false;
-                let allSupabaseKeys: string[] = [];
                 try {
-                  // First, dump ALL localStorage keys for debugging
                   logToXcode('log', '[Capacitor] Checking localStorage (total items:', localStorage.length, ')');
-                  
                   for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key) {
-                      if (key.startsWith('sb-')) {
-                        allSupabaseKeys.push(key);
-                        const value = localStorage.getItem(key);
-                        if (key.includes('code-verifier')) {
-                          if (value && value.length > 0) {
-                            pkceFound = true;
-                            logToXcode('log', '[Capacitor] ✅ PKCE verifier found in localStorage:', key, 'value length:', value.length);
-                          } else {
-                            logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier key exists but value is empty:', key);
-                          }
-                        }
+                    if (key?.startsWith('sb-') && key.includes('code-verifier')) {
+                      const value = localStorage.getItem(key);
+                      if (value && value.length > 0) {
+                        pkceFound = true;
+                        logToXcode('log', '[Capacitor] ✅ PKCE verifier in storage:', key, 'length:', value.length);
+                        break;
                       }
                     }
                   }
-                  
-                  logToXcode('log', '[Capacitor] All Supabase keys in localStorage:', allSupabaseKeys.join(', '));
-                  
                   if (!pkceFound) {
-                    logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier NOT found in localStorage before exchange');
-                    logToXcode('warn', '[Capacitor] Available Supabase keys:', allSupabaseKeys.length > 0 ? allSupabaseKeys.join(', ') : 'NONE');
-                  }
-                  const backupKey = localStorage.getItem('sitrep-pkce-verifier-key');
-                  const backupValue = localStorage.getItem('sitrep-pkce-verifier-value');
-                  if (backupKey && backupValue && backupKey.startsWith('sb-') && backupKey.includes('code-verifier')) {
-                    try {
-                      sessionStorage.setItem(backupKey, backupValue);
-                      localStorage.setItem(backupKey, backupValue);
-                      try {
-                        const encoded = encodeURIComponent(backupValue);
-                        const isSecure = typeof window !== 'undefined' && window.location?.protocol === 'https:' && !window.location?.hostname?.includes('localhost');
-                        document.cookie = `${backupKey}=${encoded};max-age=600;path=/;samesite=lax${isSecure ? ';secure' : ''}`;
-                      } catch (_) {}
-                      logToXcode('log', '[Capacitor] ✅ Restored PKCE verifier from backup (sitrep-pkce-verifier-*)');
-                    } catch (e) {
-                      logToXcode('warn', '[Capacitor] Could not restore PKCE from backup:', String(e));
-                    }
-                  } else if (!pkceFound) {
-                    logToXcode('warn', '[Capacitor] No backup found (sitrep-pkce-verifier-key/value)');
+                    logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier NOT in storage after restore');
                   }
                 } catch (e) {
-                  logToXcode('warn', '[Capacitor] Could not check localStorage for PKCE:', String(e));
+                  logToXcode('warn', '[Capacitor] Could not check storage:', String(e));
                 }
                 
                 const supabase = createClient();
