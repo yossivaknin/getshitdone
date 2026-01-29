@@ -16,162 +16,161 @@ export function createClient() {
     const client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
-          const cookies: Array<{ name: string; value: string }> = [];
-          
-          // Check sessionStorage first (primary source for PKCE and state)
+          const logStorage = (source: string, name: string, value: string | null) => {
+            const preview = value ? (value.length > 40 ? value.substring(0, 40) + '...' : value) : '(empty)';
+            console.log(`[Supabase Client] ${source} name="${name}" value=${preview} length=${value?.length ?? 0}`);
+          };
+
+          const hasValidValue = (v: string | null): v is string => !!v && v.length > 0;
+
+          const removeFromSessionStorage = (name: string) => {
+            try {
+              sessionStorage.removeItem(name);
+              console.log(`[Supabase Client] Removed empty/invalid from sessionStorage: ${name}`);
+            } catch (e) {}
+          };
+          const removeFromLocalStorage = (name: string) => {
+            try {
+              localStorage.removeItem(name);
+              console.log(`[Supabase Client] Removed empty/invalid from localStorage: ${name}`);
+            } catch (e) {}
+          };
+          const removeCookie = (name: string) => {
+            try {
+              document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+              console.log(`[Supabase Client] Removed empty/invalid cookie: ${name}`);
+            } catch (e) {}
+          };
+
+          const recreateCookie = (name: string, value: string) => {
+            try {
+              const encoded = encodeURIComponent(value);
+              const isSecure = window.location.protocol === 'https:' && !window.location.hostname.includes('localhost');
+              document.cookie = `${name}=${encoded};max-age=600;path=/;samesite=lax${isSecure ? ';secure' : ''}`;
+              console.log(`[Supabase Client] Recreated cookie: ${name}`);
+            } catch (e) {}
+          };
+
+          const byName = new Map<string, string>();
+          const add = (name: string, value: string) => {
+            if (!name.startsWith('sb-') || !hasValidValue(value)) return;
+            const existing = byName.get(name);
+            const isCodeVerifier = name.includes('code-verifier');
+            if (!existing) {
+              byName.set(name, value);
+              return;
+            }
+            if (isCodeVerifier) {
+              byName.set(name, value);
+            } else if (value.length > (existing?.length ?? 0)) {
+              byName.set(name, value);
+            }
+          };
+
+          // 1) Read sessionStorage — if value missing/empty, delete and skip
           try {
             for (let i = 0; i < sessionStorage.length; i++) {
               const key = sessionStorage.key(i);
-              if (key && key.startsWith('sb-')) {
-                const value = sessionStorage.getItem(key);
-                if (value) {
-                  const existing = cookies.find(c => c.name === key);
-                  if (!existing) {
-                    cookies.push({ name: key, value });
-                  }
-                }
+              if (!key || !key.startsWith('sb-')) continue;
+              const value = sessionStorage.getItem(key);
+              logStorage('sessionStorage', key, value);
+              if (!hasValidValue(value)) {
+                removeFromSessionStorage(key);
+                continue;
               }
+              add(key, value);
             }
           } catch (e) {
-            // sessionStorage might not be available
+            console.warn('[Supabase Client] sessionStorage read failed:', e);
           }
-          
-          // Check localStorage (important for Capacitor/mobile where sessionStorage may not persist)
+
+          // 2) Read localStorage — if value missing/empty, delete and skip
           try {
-            let foundInLocalStorage = 0;
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
-              if (key && key.startsWith('sb-')) {
-                const value = localStorage.getItem(key);
-                if (value) {
-                  const existing = cookies.find(c => c.name === key);
-                  if (!existing) {
-                    cookies.push({ name: key, value });
-                    foundInLocalStorage++;
-                    // Log PKCE verifier specifically for debugging
-                    if (key.includes('code-verifier')) {
-                      console.log('[Supabase Client] ✅ Found PKCE verifier in localStorage:', key.substring(0, 30) + '...');
-                    }
-                  }
-                }
+              if (!key || !key.startsWith('sb-')) continue;
+              const value = localStorage.getItem(key);
+              logStorage('localStorage', key, value);
+              if (!hasValidValue(value)) {
+                removeFromLocalStorage(key);
+                continue;
               }
-            }
-            if (foundInLocalStorage > 0) {
-              console.log(`[Supabase Client] Found ${foundInLocalStorage} Supabase items in localStorage`);
+              add(key, value);
             }
           } catch (e) {
-            console.warn('[Supabase Client] localStorage check failed:', e);
+            console.warn('[Supabase Client] localStorage read failed:', e);
           }
-          
-          // Also check cookies, but skip empty values
+
+          // 3) Read document.cookie — if value missing/empty, delete and skip
           if (document.cookie) {
             document.cookie.split('; ').forEach(cookie => {
               const idx = cookie.indexOf('=');
-              if (idx > 0) {
-                const name = cookie.substring(0, idx).trim();
-                const value = cookie.substring(idx + 1);
-                // Include ALL Supabase cookies (sb- prefix) with non-empty values
-                if (value && name.startsWith('sb-')) {
-                  const existing = cookies.find(c => c.name === name);
-                  if (!existing) {
-                    try {
-                      cookies.push({ name, value: decodeURIComponent(value) });
-                    } catch (e) {
-                      cookies.push({ name, value });
-                    }
-                  }
-                }
+              if (idx <= 0) return;
+              const name = cookie.substring(0, idx).trim();
+              const raw = cookie.substring(idx + 1);
+              if (!name.startsWith('sb-')) return;
+              let value: string;
+              try {
+                value = raw ? decodeURIComponent(raw) : '';
+              } catch {
+                value = raw ?? '';
               }
+              logStorage('cookie', name, value);
+              if (!hasValidValue(value)) {
+                removeCookie(name);
+                return;
+              }
+              add(name, value);
             });
           }
-          
-          // Log summary for debugging
-          const codeVerifierCookies = cookies.filter(c => c.name.includes('code-verifier'));
-          if (codeVerifierCookies.length > 0) {
-            console.log(`[Supabase Client] getAll() found ${codeVerifierCookies.length} PKCE verifier(s):`, codeVerifierCookies.map(c => ({
-              name: c.name.substring(0, 40) + '...',
-              valueLength: c.value.length,
-              fromSessionStorage: (() => {
-                try { return sessionStorage.getItem(c.name) === c.value; } catch { return false; }
-              })(),
-              fromLocalStorage: (() => {
-                try { return localStorage.getItem(c.name) === c.value; } catch { return false; }
-              })(),
-            })));
-          } else {
-            console.warn('[Supabase Client] getAll() found NO PKCE verifier cookies!');
-            // Dump all Supabase keys for debugging
-            try {
-              const allSbKeys: string[] = [];
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('sb-')) allSbKeys.push(key);
-              }
-              for (let i = 0; i < sessionStorage.length; i++) {
-                const key = sessionStorage.key(i);
-                if (key && key.startsWith('sb-') && !allSbKeys.includes(key)) allSbKeys.push(key);
-              }
-              console.warn('[Supabase Client] Available Supabase keys in storage:', allSbKeys.length > 0 ? allSbKeys.join(', ') : 'NONE');
-            } catch (e) {
-              console.warn('[Supabase Client] Could not dump storage keys:', e);
+
+          // 4) For each key we have: if cookie was missing/empty, recreate it from the value we have
+          const cookies = Array.from(byName.entries()).map(([name, value]) => ({ name, value }));
+          for (const { name, value } of cookies) {
+            const fromCookie = document.cookie.split('; ').some(c => c.startsWith(name + '='));
+            if (!fromCookie && hasValidValue(value)) {
+              recreateCookie(name, value);
             }
+            console.log(`[Supabase Client] getAll returning name="${name}" value=${value.length > 40 ? value.substring(0, 40) + '...' : value} length=${value.length}`);
           }
-          
-          return cookies;
+
+          return Promise.resolve(cookies);
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => {
-            // Only process Supabase cookies (sb- prefix)
-            if (!name.startsWith('sb-')) {
-              return;
-            }
-            
+            if (!name.startsWith('sb-')) return;
+
+            const valuePreview = value ? (value.length > 40 ? value.substring(0, 40) + '...' : value) : '(empty)';
+            console.log(`[Supabase Client] setAll name="${name}" value=${valuePreview} length=${value?.length ?? 0}`);
+
             const isCodeVerifier = name.includes('code-verifier');
             const isState = name.includes('state');
-            
-            // Handle empty values (cleanup/removal signals from Supabase)
+
             if (!value) {
               if (isCodeVerifier || isState) {
-                // Just remove from cookies, keep in sessionStorage
-                try { 
-                  document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; 
+                try {
+                  document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
                 } catch (e) {}
               }
               return;
             }
-            
-            // Priority 1: sessionStorage (most reliable for PKCE and state across redirects)
+
             try {
               sessionStorage.setItem(name, value);
-              if (isCodeVerifier) {
-                console.log('[Supabase Client] ✅ Stored PKCE verifier in sessionStorage:', name.substring(0, 30) + '...');
-              }
             } catch (e) {
-              console.warn('[Supabase Client] Failed to store in sessionStorage:', e);
+              console.warn('[Supabase Client] setAll sessionStorage failed:', e);
             }
-            
-            // Priority 2: localStorage as backup (CRITICAL for Capacitor/mobile)
             try {
               localStorage.setItem(name, value);
-              if (isCodeVerifier) {
-                console.log('[Supabase Client] ✅ Stored PKCE verifier in localStorage:', name.substring(0, 30) + '...');
-              }
             } catch (e) {
-              console.warn('[Supabase Client] Failed to store in localStorage:', e);
+              console.warn('[Supabase Client] setAll localStorage failed:', e);
             }
-            
-            // Priority 3: cookies as last resort
             try {
               const encodedValue = encodeURIComponent(value);
               const isSecure = window.location.protocol === 'https:' && !window.location.hostname.includes('localhost');
-              const sameSite = 'lax';
-              const maxAge = 600; // 10 minutes for PKCE and state
-              
-              const cookieStr = `${name}=${encodedValue};max-age=${maxAge};path=/;samesite=${sameSite}${isSecure ? ';secure' : ''}`;
+              const cookieStr = `${name}=${encodedValue};max-age=600;path=/;samesite=lax${isSecure ? ';secure' : ''}`;
               document.cookie = cookieStr;
-            } catch (e) {
-              // Cookie setting failed
-            }
+            } catch (e) {}
           });
         },
       },
