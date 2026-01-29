@@ -344,6 +344,24 @@ export function CapacitorInit() {
                     logToXcode('warn', '[Capacitor] ⚠️ PKCE verifier NOT found in localStorage before exchange');
                     logToXcode('warn', '[Capacitor] Available Supabase keys:', allSupabaseKeys.length > 0 ? allSupabaseKeys.join(', ') : 'NONE');
                   }
+                  const backupKey = localStorage.getItem('sitrep-pkce-verifier-key');
+                  const backupValue = localStorage.getItem('sitrep-pkce-verifier-value');
+                  if (backupKey && backupValue && backupKey.startsWith('sb-') && backupKey.includes('code-verifier')) {
+                    try {
+                      sessionStorage.setItem(backupKey, backupValue);
+                      localStorage.setItem(backupKey, backupValue);
+                      try {
+                        const encoded = encodeURIComponent(backupValue);
+                        const isSecure = typeof window !== 'undefined' && window.location?.protocol === 'https:' && !window.location?.hostname?.includes('localhost');
+                        document.cookie = `${backupKey}=${encoded};max-age=600;path=/;samesite=lax${isSecure ? ';secure' : ''}`;
+                      } catch (_) {}
+                      logToXcode('log', '[Capacitor] ✅ Restored PKCE verifier from backup (sitrep-pkce-verifier-*)');
+                    } catch (e) {
+                      logToXcode('warn', '[Capacitor] Could not restore PKCE from backup:', String(e));
+                    }
+                  } else if (!pkceFound) {
+                    logToXcode('warn', '[Capacitor] No backup found (sitrep-pkce-verifier-key/value)');
+                  }
                 } catch (e) {
                   logToXcode('warn', '[Capacitor] Could not check localStorage for PKCE:', String(e));
                 }
@@ -399,7 +417,8 @@ export function CapacitorInit() {
 
                 try {
                   localStorage.setItem('lastAuthSuccess', JSON.stringify({ userId: data.session.user.id, ts: Date.now() }));
-                  // clear pending deep link on success
+                  localStorage.removeItem('sitrep-pkce-verifier-key');
+                  localStorage.removeItem('sitrep-pkce-verifier-value');
                   localStorage.removeItem('pendingDeepLink');
                   // also mark code processed to prevent reprocessing if startup repeats
                   try {

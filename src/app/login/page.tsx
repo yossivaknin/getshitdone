@@ -9,9 +9,9 @@ function LoginForm() {
       className="min-h-screen bg-[#0F0F0F] text-white flex items-center justify-center p-4 safe-top" 
       style={{ paddingTop: `calc(1rem + env(safe-area-inset-top))` }}
     >
-      {/* DEBUG: Build time - 2026-01-28 20:46:54 REDIRECT-ON-400-V6 */}
+      {/* DEBUG: Build time - 2026-01-28 20:51:49 PKCE-BACKUP-V7 */}
       <div className="fixed top-16 right-4 bg-red-600 text-white px-3 py-2 rounded text-xs font-mono z-50 border-2 border-yellow-400">
-        Build: 2026-01-28 20:46:54 REDIRECT-ON-400-V6
+        Build: 2026-01-28 20:51:49 PKCE-BACKUP-V7
       </div>
       <div className="w-full max-w-md">
         {/* Logo/Brand Section */}
@@ -88,7 +88,23 @@ function LoginForm() {
                     
                     if (!pkceFound && isCapacitor) {
                       console.error('[Login] ⚠️ PKCE verifier NOT found in localStorage before redirect! This will cause OAuth to fail.');
-                      // Still proceed - maybe it's stored in sessionStorage or cookies
+                    } else if (pkceFound && isCapacitor) {
+                      try {
+                        for (let i = 0; i < localStorage.length; i++) {
+                          const key = localStorage.key(i);
+                          if (key && key.startsWith('sb-') && key.includes('code-verifier')) {
+                            const value = localStorage.getItem(key);
+                            if (value && value.length > 0) {
+                              localStorage.setItem('sitrep-pkce-verifier-key', key);
+                              localStorage.setItem('sitrep-pkce-verifier-value', value);
+                              console.log('[Login] ✅ Backed up PKCE verifier for Capacitor deep link restore');
+                              break;
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('[Login] Could not backup PKCE verifier:', e);
+                      }
                     }
                     
                     console.log('[Login] Redirecting to OAuth URL...');
