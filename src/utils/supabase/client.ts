@@ -1,5 +1,33 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+function clearAllSupabaseStorage() {
+  const keysToRemove = new Set<string>();
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith('sb-')) keysToRemove.add(key);
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('sb-')) keysToRemove.add(key);
+    }
+    if (document.cookie) {
+      document.cookie.split('; ').forEach((part) => {
+        const name = part.indexOf('=') > 0 ? part.substring(0, part.indexOf('=')).trim() : '';
+        if (name.startsWith('sb-')) keysToRemove.add(name);
+      });
+    }
+    keysToRemove.forEach((key) => {
+      try { sessionStorage.removeItem(key); } catch {}
+      try { localStorage.removeItem(key); } catch {}
+      try { document.cookie = `${key}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; } catch {}
+    });
+    console.warn('[Supabase Client] Cleared all Supabase storage after token refresh failure (400/429) to stop refresh loop.');
+  } catch (e) {
+    console.warn('[Supabase Client] clearAllSupabaseStorage failed:', e);
+  }
+}
+
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -11,9 +39,19 @@ export function createClient() {
     throw new Error(`Missing Supabase environment variables: ${missing.join(', ')}`);
   }
 
+  const customFetch: typeof fetch = (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+    return fetch(input, init).then((res) => {
+      if (url.includes('auth/v1/token') && url.includes('grant_type=refresh_token') && (res.status === 400 || res.status === 429)) {
+        clearAllSupabaseStorage();
+      }
+      return res;
+    });
+  };
+
   try {
-    // Create browser client with proper cookie configuration for PKCE
     const client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      global: { fetch: customFetch },
       cookies: {
         getAll() {
           const logStorage = (source: string, name: string, value: string | null) => {
