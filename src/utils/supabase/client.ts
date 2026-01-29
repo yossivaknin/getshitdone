@@ -22,7 +22,10 @@ function clearAllSupabaseStorage() {
       try { localStorage.removeItem(key); } catch {}
       try { document.cookie = `${key}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`; } catch {}
     });
-    console.warn('[Supabase Client] Cleared all Supabase storage after token refresh failure (400/429) to stop refresh loop.');
+    console.warn('[Supabase Client] Token refresh failed (400/429). Cleared all Supabase storage and redirecting to login.');
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.replace('/login');
+    }
   } catch (e) {
     console.warn('[Supabase Client] clearAllSupabaseStorage failed:', e);
   }
